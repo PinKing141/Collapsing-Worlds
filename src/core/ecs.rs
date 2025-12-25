@@ -7,12 +7,14 @@ use crate::simulation::city::CityState;
 use crate::simulation::case::{CaseEventLog, CaseRegistry};
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::IdentityEvidenceStore;
+use crate::simulation::civilian::CivilianState;
 use crate::simulation::storylets::StoryletLibrary;
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::pressure::PressureState;
 use crate::simulation::time::{advance_time_system, GameTime};
 use crate::systems::combat::{combat_system, CombatLog};
 use crate::systems::case::case_progress_system;
+use crate::systems::civilian::civilian_system;
 use crate::systems::economy::economy_system;
 use crate::systems::event_resolver::{event_resolver_system, ResolvedFactionEventLog};
 use crate::systems::faction::{faction_director_system, FactionDirector, FactionEventLog};
@@ -50,6 +52,7 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(CaseEventLog::default());
     world.insert_resource(PersonaEventLog::default());
     world.insert_resource(PressureState::default());
+    world.insert_resource(CivilianState::default());
     world.insert_resource(load_faction_director());
     world.insert_resource(load_storylets());
     world.insert_resource(StoryletState::default());
@@ -78,6 +81,9 @@ pub fn create_schedule() -> Schedule {
             unit_movement_system.in_set(TickSet::Simulation),
             combat_system.in_set(TickSet::Simulation),
             pressure_system.in_set(TickSet::Simulation),
+            civilian_system
+                .in_set(TickSet::Simulation)
+                .after(pressure_system),
             heat_decay_system.in_set(TickSet::Time),
             advance_time_system.in_set(TickSet::Time),
         ),

@@ -6,6 +6,7 @@ use superhero_universe::components::persona::{hero_persona_stack, Alignment, Per
 use superhero_universe::components::world::Position;
 use superhero_universe::core::world::ActionIntent;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
+use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 use superhero_universe::rules::{
@@ -13,6 +14,9 @@ use superhero_universe::rules::{
     WorldState,
 };
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
+use superhero_universe::simulation::civilian::{
+    apply_civilian_effects, tick_civilian_life, CivilianState,
+};
 use superhero_universe::simulation::city::CityState;
 use superhero_universe::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatState};
 use superhero_universe::simulation::evidence::WorldEvidence;
@@ -25,6 +29,7 @@ use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::StoryletLibrary;
 use superhero_universe::simulation::time::GameTime;
 use superhero_universe::systems::case::update_cases;
+use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
     combat_tick, force_escalate, force_escape, resolve_combat, start_combat,
 };
@@ -112,10 +117,14 @@ fn main() {
         in_public: true,
         witnesses: 0,
     };
+    let mut civilian_state = CivilianState::default();
     update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+    apply_civilian_pressure(&civilian_state, &mut pressure);
     world.pressure = pressure.to_modifiers();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    let civilian_events = load_civilian_event_library();
+
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -135,7 +144,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -276,6 +285,7 @@ fn main() {
                                             &mut event_log,
                                         );
                                         update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                        apply_civilian_pressure(&civilian_state, &mut pressure);
                                         world.pressure = pressure.to_modifiers();
                                         persist_world_state(
                                             &mut *world_repo,
@@ -333,6 +343,46 @@ fn main() {
                         &cases,
                         &game_time,
                     );
+                }
+            }
+            "civilian" => {
+                let sub = parts.next();
+                match sub {
+                    None => {
+                        print_civilian_status(&civilian_state, &game_time);
+                        print_pending_civilian_events(
+                            &civilian_state,
+                            &civilian_events,
+                            &game_time,
+                        );
+                    }
+                    Some("events") => {
+                        print_pending_civilian_events(
+                            &civilian_state,
+                            &civilian_events,
+                            &game_time,
+                        );
+                    }
+                    Some("resolve") => {
+                        let Some(event_id) = parts.next() else {
+                            println!("Usage: civilian resolve <event_id> <choice_id>");
+                            continue;
+                        };
+                        let Some(choice_id) = parts.next() else {
+                            println!("Usage: civilian resolve <event_id> <choice_id>");
+                            continue;
+                        };
+                        resolve_civilian_event(
+                            &mut civilian_state,
+                            &civilian_events,
+                            event_id,
+                            choice_id,
+                        );
+                        apply_civilian_pressure(&civilian_state, &mut pressure);
+                    }
+                    Some(_) => {
+                        println!("Usage: civilian [events|resolve <event_id> <choice_id>]");
+                    }
                 }
             }
             "events" => {
@@ -477,8 +527,10 @@ fn main() {
                                 evidence.tick_decay();
                                 decay_heat(&mut city, &cases);
                                 game_time.advance();
+                                tick_civilian_life(&mut civilian_state, &game_time);
                                 storylet_state.tick();
                                 update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                apply_civilian_pressure(&civilian_state, &mut pressure);
                                 world.pressure = pressure.to_modifiers();
 
                                 if let Some(end_reason) = tick_result.ended {
@@ -539,6 +591,7 @@ fn main() {
                     alignment,
                     &mut player_pos,
                     &mut game_time,
+                    &mut civilian_state,
                     &mut storylet_state,
                     &mut pressure,
                     count,
@@ -1129,6 +1182,95 @@ fn print_scene(scene: &WorldEvidence) {
     }
 }
 
+fn print_civilian_status(state: &CivilianState, time: &GameTime) {
+    let pressure = state.pressure_targets();
+    println!("Civilian status @ {}:", time.to_string());
+    println!("  Job: {:?}", state.job_status);
+    println!(
+        "  Finances: cash={} debt={} rent={} rent_due_in={} wage={}",
+        state.finances.cash,
+        state.finances.debt,
+        state.finances.rent,
+        state.finances.rent_due_in,
+        state.finances.wage
+    );
+    println!(
+        "  Social: support={} strain={} obligation={}",
+        state.social.support, state.social.strain, state.social.obligation
+    );
+    println!(
+        "  Civilian pressure targets: temporal={:.1} resource={:.1} moral={:.1}",
+        pressure.temporal, pressure.resource, pressure.moral
+    );
+}
+
+fn print_pending_civilian_events(
+    state: &CivilianState,
+    library: &[CivilianStorylet],
+    time: &GameTime,
+) {
+    if state.pending_events.is_empty() {
+        println!("Civilian events: none");
+        return;
+    }
+    println!("Civilian events:");
+    for event in &state.pending_events {
+        let age = time.tick.saturating_sub(event.created_tick);
+        match find_civilian_event(library, &event.storylet_id) {
+            Some(def) => {
+                println!("  {} | {} | queued {} ticks ago", def.id, def.title, age);
+                for choice in &def.choices {
+                    println!("    [{}] {}", choice.id, choice.text);
+                }
+            }
+            None => {
+                println!("  {} | (missing definition) | queued {} ticks ago", event.storylet_id, age);
+            }
+        }
+    }
+}
+
+fn resolve_civilian_event(
+    state: &mut CivilianState,
+    library: &[CivilianStorylet],
+    event_id: &str,
+    choice_id: &str,
+) {
+    let Some(event_def) = find_civilian_event(library, event_id) else {
+        println!("Unknown civilian event: {}", event_id);
+        return;
+    };
+    let Some(choice) = event_def.choices.iter().find(|choice| choice.id == choice_id) else {
+        println!("Unknown choice {} for event {}", choice_id, event_id);
+        return;
+    };
+    let mut applied = apply_civilian_effects(state, &event_def.effects);
+    applied.extend(apply_civilian_effects(state, &choice.effects));
+    if let Some(index) = state
+        .pending_events
+        .iter()
+        .position(|event| event.storylet_id == event_id)
+    {
+        state.pending_events.remove(index);
+    }
+    println!("Resolved {} -> {}", event_def.title, choice.text);
+    if applied.is_empty() {
+        println!("No civilian effects applied.");
+    } else {
+        println!("Applied effects:");
+        for entry in applied {
+            println!("  {}", entry);
+        }
+    }
+}
+
+fn find_civilian_event<'a>(
+    library: &'a [CivilianStorylet],
+    event_id: &str,
+) -> Option<&'a CivilianStorylet> {
+    library.iter().find(|event| event.id == event_id)
+}
+
 fn record_identity_evidence(
     identity: &mut IdentityEvidenceStore,
     city: &CityState,
@@ -1227,6 +1369,7 @@ fn tick_world(
     alignment: Alignment,
     position: &mut Position,
     game_time: &mut GameTime,
+    civilian_state: &mut CivilianState,
     storylet_state: &mut StoryletState,
     pressure: &mut PressureState,
     turns: u32,
@@ -1258,8 +1401,10 @@ fn tick_world(
             1,
         );
         game_time.advance();
+        tick_civilian_life(civilian_state, game_time);
         storylet_state.tick();
         update_pressure(pressure, city, scene, cases, game_time);
+        apply_civilian_pressure(civilian_state, pressure);
         world.pressure = pressure.to_modifiers();
     }
 }
@@ -1366,6 +1511,16 @@ fn load_storylet_file(path: &str) -> Vec<Storylet> {
         Ok(catalog) => catalog.storylets,
         Err(err) => {
             eprintln!("Failed to load storylets from {}: {}", path, err);
+            Vec::new()
+        }
+    }
+}
+
+fn load_civilian_event_library() -> Vec<CivilianStorylet> {
+    match load_civilian_event_catalog("./assets/data/civilian_events.json") {
+        Ok(catalog) => catalog.events,
+        Err(err) => {
+            eprintln!("Failed to load civilian events: {}", err);
             Vec::new()
         }
     }
