@@ -7,18 +7,20 @@ use crate::rules::mastery::MasteryStage;
 use crate::rules::power::ExpressionId;
 use crate::rules::signature::SignatureType;
 use crate::simulation::case::{Case, CaseRegistry, CaseStatus, CaseTargetType};
-use crate::simulation::combat::{Combatant, CombatIntent, CombatScale, CombatSide, CombatState};
 use crate::simulation::cast::{
     CharacterPersona, CharacterPower, CharacterRelationship, CharacterRole, PersistentCharacter,
     PromotionCandidate,
 };
-use crate::simulation::city::{CityId, CityState, HeatResponse, LocationId, LocationState, LocationTag};
-use crate::simulation::region::{ContinentId, CountryId, RegionId};
+use crate::simulation::city::{
+    CityId, CityState, HeatResponse, LocationId, LocationState, LocationTag,
+};
+use crate::simulation::combat::{CombatIntent, CombatScale, CombatSide, CombatState, Combatant};
 use crate::simulation::growth::{ExpressionMastery, GrowthState, Reputation};
+use crate::simulation::region::{ContinentId, CountryId, RegionId};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
 
-const WORLD_SCHEMA_VERSION: i64 = 3;
+const WORLD_SCHEMA_VERSION: i64 = 4;
 const WORLD_SAVE_VERSION: i64 = 1;
 
 const WORLD_DB_SCHEMA: &str = r#"
@@ -104,6 +106,12 @@ CREATE TABLE IF NOT EXISTS storylet_cooldowns (
 CREATE TABLE IF NOT EXISTS storylet_flags (
   flag_key TEXT PRIMARY KEY,
   flag_value INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS storylet_punctuation (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  only INTEGER NOT NULL,
+  turns INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS growth_state (
@@ -315,7 +323,9 @@ fn importance_to_str(tier: crate::simulation::cast::ImportanceTier) -> &'static 
     }
 }
 
-fn importance_from_str(value: &str) -> Result<crate::simulation::cast::ImportanceTier, WorldDbError> {
+fn importance_from_str(
+    value: &str,
+) -> Result<crate::simulation::cast::ImportanceTier, WorldDbError> {
     match value {
         "A" => Ok(crate::simulation::cast::ImportanceTier::A),
         _ => Err(WorldDbError::InvalidData(format!(
@@ -601,6 +611,7 @@ impl WorldDb {
         tx.execute("DELETE FROM storylet_fired", [])?;
         tx.execute("DELETE FROM storylet_cooldowns", [])?;
         tx.execute("DELETE FROM storylet_flags", [])?;
+        tx.execute("DELETE FROM storylet_punctuation", [])?;
         for storylet_id in &state.storylet_state.fired {
             tx.execute(
                 "INSERT INTO storylet_fired (storylet_id) VALUES (?1)",
@@ -619,6 +630,17 @@ impl WorldDb {
                 params![flag, if *value { 1 } else { 0 }],
             )?;
         }
+        tx.execute(
+            "INSERT INTO storylet_punctuation (id, only, turns) VALUES (1, ?1, ?2)",
+            params![
+                if state.storylet_state.punctuation.only {
+                    1
+                } else {
+                    0
+                },
+                state.storylet_state.punctuation.remaining_turns as i64
+            ],
+        )?;
 
         tx.execute("DELETE FROM growth_state", [])?;
         tx.execute("DELETE FROM expression_mastery", [])?;
@@ -701,7 +723,7 @@ impl WorldDb {
                 if schema_version == WORLD_SCHEMA_VERSION && save_version == WORLD_SAVE_VERSION {
                     return Ok(());
                 }
-                if (schema_version == 1 || schema_version == 2)
+                if (schema_version == 1 || schema_version == 2 || schema_version == 3)
                     && save_version == WORLD_SAVE_VERSION
                 {
                     self.conn.execute(
@@ -751,8 +773,17 @@ impl WorldDb {
 
         let mut characters = Vec::new();
         for row in rows {
-            let (character_id, scope_id, first_name, last_name, birth_year, ancestry, nationality, importance_tier, created_at_tick) =
-                row?;
+            let (
+                character_id,
+                scope_id,
+                first_name,
+                last_name,
+                birth_year,
+                ancestry,
+                nationality,
+                importance_tier,
+                created_at_tick,
+            ) = row?;
             let importance_tier = importance_from_str(&importance_tier)?;
             characters.push(PersistentCharacter {
                 character_id: character_id.clone(),
@@ -776,7 +807,10 @@ impl WorldDb {
         Ok(characters)
     }
 
-    pub fn upsert_character(&mut self, character: &PersistentCharacter) -> Result<(), WorldDbError> {
+    pub fn upsert_character(
+        &mut self,
+        character: &PersistentCharacter,
+    ) -> Result<(), WorldDbError> {
         let tx = self.conn.transaction()?;
         tx.execute(
             "INSERT OR REPLACE INTO characters (character_id, scope_id, first_name, last_name, birth_year, ancestry, nationality, importance_tier, created_at_tick) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -880,18 +914,18 @@ impl WorldDb {
     }
 
     fn next_character_id(&self) -> Result<String, WorldDbError> {
-        let next_id: i64 = self
-            .conn
-            .query_row("SELECT COALESCE(MAX(rowid), 0) + 1 FROM characters", [], |row| {
-                row.get(0)
-            })?;
+        let next_id: i64 = self.conn.query_row(
+            "SELECT COALESCE(MAX(rowid), 0) + 1 FROM characters",
+            [],
+            |row| row.get(0),
+        )?;
         Ok(format!("char_{}", next_id))
     }
 
     fn load_game_time(&self) -> Result<GameTime, WorldDbError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT tick, day, hour, week, month, is_day FROM world_time WHERE id = 1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT tick, day, hour, week, month, is_day FROM world_time WHERE id = 1")?;
         let mut rows = stmt.query([])?;
         let Some(row) = rows.next()? else {
             return Ok(GameTime::default());
@@ -1009,7 +1043,8 @@ impl WorldDb {
         let mut state = CombatState::default();
         state.location_id = active_location;
 
-        let Some((active, source, location_id, scale, tick, escape_progress, pending_expr)) = row else {
+        let Some((active, source, location_id, scale, tick, escape_progress, pending_expr)) = row
+        else {
             return Ok(state);
         };
 
@@ -1106,7 +1141,10 @@ impl WorldDb {
         })
     }
 
-    fn load_location_tags(&self, location_id: LocationId) -> Result<Vec<LocationTag>, WorldDbError> {
+    fn load_location_tags(
+        &self,
+        location_id: LocationId,
+    ) -> Result<Vec<LocationTag>, WorldDbError> {
         let mut tags = Vec::new();
         let mut stmt = self
             .conn
@@ -1128,9 +1166,9 @@ impl WorldDb {
         location_id: LocationId,
     ) -> Result<HashMap<String, u16>, WorldDbError> {
         let mut influence = HashMap::new();
-        let mut stmt = self
-            .conn
-            .prepare("SELECT faction_id, influence FROM location_faction_influence WHERE location_id = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT faction_id, influence FROM location_faction_influence WHERE location_id = ?1",
+        )?;
         let rows = stmt.query_map(params![location_id.0 as i64], |row| {
             let faction_id: String = row.get(0)?;
             let value: i64 = row.get(1)?;
@@ -1162,8 +1200,16 @@ impl WorldDb {
         })?;
 
         for row in rows {
-            let (case_id, faction_id, location_id, target_type, progress, heat_lock, status, milestone) =
-                row?;
+            let (
+                case_id,
+                faction_id,
+                location_id,
+                target_type,
+                progress,
+                heat_lock,
+                status,
+                milestone,
+            ) = row?;
             let target_type = case_target_from_str(&target_type)?;
             let status = case_status_from_str(&status)?;
             let signature_pattern = self.load_case_signatures(case_id)?;
@@ -1217,7 +1263,9 @@ impl WorldDb {
     fn load_storylet_state(&self) -> Result<StoryletState, WorldDbError> {
         let mut state = StoryletState::default();
 
-        let mut stmt = self.conn.prepare("SELECT storylet_id FROM storylet_fired")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT storylet_id FROM storylet_fired")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
             state.fired.insert(row?);
@@ -1243,6 +1291,19 @@ impl WorldDb {
         for row in rows {
             let (key, value) = row?;
             state.flags.insert(key, value);
+        }
+
+        if let Some((only, turns)) = self
+            .conn
+            .query_row(
+                "SELECT only, turns FROM storylet_punctuation WHERE id = 1",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?
+        {
+            state.punctuation.only = only != 0;
+            state.punctuation.remaining_turns = turns as i32;
         }
 
         Ok(state)
@@ -1373,6 +1434,10 @@ impl crate::world::repository::WorldRepository for WorldDb {
         candidate: &PromotionCandidate,
         created_at_tick: u64,
     ) -> Result<PersistentCharacter, Box<dyn std::error::Error>> {
-        Ok(WorldDb::promote_candidate(self, candidate, created_at_tick)?)
+        Ok(WorldDb::promote_candidate(
+            self,
+            candidate,
+            created_at_tick,
+        )?)
     }
 }
