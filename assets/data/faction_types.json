@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "faction_types": [
+    {
+      "id": "civil_law_enforcement",
+      "name": "Civil Law Enforcement",
+      "domain": "LAW",
+      "default_jurisdiction": "LOCAL",
+      "detection": {
+        "signature_types": [
+          "VISUAL_ANOMALY",
+          "ACOUSTIC_SHOCK",
+          "KINETIC_STRESS",
+          "CHEMICAL_RESIDUE",
+          "THERMAL_BLOOM"
+        ],
+        "heat_min": 10
+      },
+      "response": {
+        "doctrine": ["ARREST", "CONTAIN"],
+        "thresholds": [
+          {
+            "heat": 15,
+            "level": "PATROL",
+            "actions": [
+              { "kind": "SPAWN_PATROL", "params": { "strength": 1 } }
+            ]
+          },
+          {
+            "heat": 30,
+            "level": "TACTICAL",
+            "actions": [
+              { "kind": "SPAWN_TACTICAL", "params": { "strength": 2 } },
+              { "kind": "START_INVESTIGATION", "params": { "priority": "MEDIUM" } }
+            ]
+          },
+          {
+            "heat": 50,
+            "level": "CITY_ALERT",
+            "actions": [
+              { "kind": "START_INVESTIGATION", "params": { "scope": "CITY" } },
+              { "kind": "ESCALATE_SECURITY", "params": { "severity": "HIGH" } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["identity_pressure", "public_trust"],
+      "tags": ["police", "civic"]
+    },
+    {
+      "id": "metahuman_oversight",
+      "name": "Metahuman Oversight Agency",
+      "domain": "MILITARY",
+      "default_jurisdiction": "NATIONAL",
+      "detection": {
+        "signature_types": [
+          "EM_SPIKE",
+          "DIMENSIONAL_RESIDUE",
+          "GRAVITIC_DISTURBANCE",
+          "CAUSAL_IMPRINT",
+          "RADIATION_TRACE"
+        ],
+        "heat_min": 25
+      },
+      "response": {
+        "doctrine": ["CONTAIN", "STUDY"],
+        "thresholds": [
+          {
+            "heat": 25,
+            "level": "WATCH_FILE",
+            "actions": [
+              { "kind": "OPEN_WATCH_FILE", "params": { "depth": 1 } }
+            ]
+          },
+          {
+            "heat": 40,
+            "level": "SURVEILLANCE",
+            "actions": [
+              { "kind": "DEPLOY_SURVEILLANCE", "params": { "coverage": "LOCAL" } }
+            ]
+          },
+          {
+            "heat": 60,
+            "level": "CONTAINMENT",
+            "actions": [
+              { "kind": "DISPATCH_CONTAINMENT", "params": { "team": "ALPHA" } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["registration_pressure", "moral_conflict"],
+      "tags": ["agency", "oversight"]
+    },
+    {
+      "id": "private_conglomerate",
+      "name": "Private Security Conglomerate",
+      "domain": "CORPORATE",
+      "default_jurisdiction": "REGIONAL",
+      "detection": {
+        "signature_types": [
+          "EM_SPIKE",
+          "THERMAL_BLOOM",
+          "CHEMICAL_RESIDUE",
+          "BIO_MARKER"
+        ],
+        "heat_min": 20
+      },
+      "response": {
+        "doctrine": ["EXPLOIT", "STUDY"],
+        "thresholds": [
+          {
+            "heat": 20,
+            "level": "DATA_ACQUISITION",
+            "actions": [
+              { "kind": "START_MONITORING", "params": { "signal": "TECH" } }
+            ]
+          },
+          {
+            "heat": 35,
+            "level": "ASSET_RETRIEVAL",
+            "actions": [
+              { "kind": "SEND_RETRIEVAL_TEAM", "params": { "priority": "HIGH" } }
+            ]
+          },
+          {
+            "heat": 50,
+            "level": "BLACK_BUDGET",
+            "actions": [
+              { "kind": "ACTIVATE_BLACK_BUDGET", "params": { "project": "OMEGA" } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["corporate_warfare", "weaponization"],
+      "tags": ["corporate", "security"]
+    },
+    {
+      "id": "organised_crime",
+      "name": "Organised Crime Syndicate",
+      "domain": "CRIMINAL",
+      "default_jurisdiction": "LOCAL",
+      "detection": {
+        "signature_types": [
+          "VISUAL_ANOMALY",
+          "KINETIC_STRESS",
+          "CHEMICAL_RESIDUE",
+          "BIO_MARKER"
+        ],
+        "heat_min": 10
+      },
+      "response": {
+        "doctrine": ["DISRUPT", "EXPLOIT"],
+        "thresholds": [
+          {
+            "heat": 15,
+            "level": "TERRITORY_PUSH",
+            "actions": [
+              { "kind": "EXPAND_TERRITORY", "params": { "aggression": 1 } }
+            ]
+          },
+          {
+            "heat": 30,
+            "level": "HIRED_ENFORCER",
+            "actions": [
+              { "kind": "HIRE_ENFORCER", "params": { "rank": "LIEUTENANT" } },
+              { "kind": "PROXY_CRIME", "params": { "mode": "CHAOS" } }
+            ]
+          },
+          {
+            "heat": 45,
+            "level": "DIRECT_HIT",
+            "actions": [
+              { "kind": "ORDER_HIT", "params": { "target": "DISRUPTER" } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["gang_war", "collateral_spill"],
+      "tags": ["crime", "gang"]
+    },
+    {
+      "id": "civic_network",
+      "name": "Civic Protection Network",
+      "domain": "CIVIC",
+      "default_jurisdiction": "LOCAL",
+      "detection": {
+        "signature_types": ["VISUAL_ANOMALY", "ACOUSTIC_SHOCK", "THERMAL_BLOOM"],
+        "heat_min": 10
+      },
+      "response": {
+        "doctrine": ["CONTAIN"],
+        "thresholds": [
+          {
+            "heat": 10,
+            "level": "WARNINGS",
+            "actions": [
+              { "kind": "BROADCAST_WARNING", "params": { "range": "LOCAL" } }
+            ]
+          },
+          {
+            "heat": 25,
+            "level": "EVACUATION",
+            "actions": [
+              { "kind": "START_EVACUATION", "params": { "capacity": 50 } }
+            ]
+          },
+          {
+            "heat": 35,
+            "level": "PRESSURE",
+            "actions": [
+              { "kind": "LEAK_TO_PRESS", "params": { "channel": "LOCAL" } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["public_support", "resilience"],
+      "tags": ["civic", "community"]
+    },
+    {
+      "id": "occult_order",
+      "name": "Occult Order",
+      "domain": "OCCULT",
+      "default_jurisdiction": "LOCAL",
+      "detection": {
+        "signature_types": [
+          "ARCANE_RESONANCE",
+          "DIMENSIONAL_RESIDUE",
+          "PSYCHIC_ECHO",
+          "CAUSAL_IMPRINT"
+        ],
+        "heat_min": 15
+      },
+      "response": {
+        "doctrine": ["CONTAIN", "STUDY"],
+        "thresholds": [
+          {
+            "heat": 15,
+            "level": "SCOUTING",
+            "actions": [
+              { "kind": "DISPATCH_SCOUT", "params": { "focus": "RITUAL" } }
+            ]
+          },
+          {
+            "heat": 30,
+            "level": "WARDING",
+            "actions": [
+              { "kind": "PLACE_WARD", "params": { "strength": 2 } }
+            ]
+          },
+          {
+            "heat": 50,
+            "level": "RITUAL",
+            "actions": [
+              { "kind": "BEGIN_RITUAL", "params": { "tier": 1 } }
+            ]
+          }
+        ]
+      },
+      "narrative_pressure": ["forbidden_knowledge", "corruption"],
+      "tags": ["occult", "ritual"]
+    }
+  ]
+}

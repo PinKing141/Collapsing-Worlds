@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "storylets": [
+    {
+      "id": "civ_job_late_notice",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "time.is_day"],
+      "text_stub": "Your boss notices you arrived late again. The office is watching.",
+      "choices": [
+        {
+          "id": "apologize",
+          "text": "Apologize and make it up tonight.",
+          "effects": ["civilian.suspicion -2", "stress +1"]
+        },
+        {
+          "id": "deflect",
+          "text": "Deflect with a vague excuse.",
+          "effects": ["civilian.suspicion +3", "reputation -1"]
+        }
+      ],
+      "tags": ["work", "pressure"]
+    },
+    {
+      "id": "civ_family_invite",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN"],
+      "text_stub": "A family member invites you to dinner the same night patrols spike.",
+      "choices": [
+        {
+          "id": "attend",
+          "text": "Attend dinner.",
+          "effects": ["civilian.suspicion -3", "public.suspicion +1", "heat +2"]
+        },
+        {
+          "id": "skip",
+          "text": "Skip and patrol.",
+          "effects": ["civilian.suspicion +4", "public.suspicion -1"]
+        }
+      ],
+      "tags": ["family", "tradeoff"]
+    },
+    {
+      "id": "civ_media_rumor",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "public.suspicion >= 20"],
+      "text_stub": "A rumor ties recent masked sightings to your neighborhood.",
+      "choices": [
+        {
+          "id": "lay_low",
+          "text": "Lay low and avoid attention.",
+          "effects": ["civilian.suspicion -2", "public.suspicion +1"]
+        },
+        {
+          "id": "seed_alibi",
+          "text": "Seed an alibi with friends.",
+          "effects": ["civilian.suspicion -4", "stress +1"]
+        }
+      ],
+      "tags": ["media", "alibi"]
+    },
+    {
+      "id": "civ_overtime_request",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "time.is_day"],
+      "text_stub": "Your supervisor asks for overtime during a string of incidents.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept the overtime.",
+          "effects": ["civilian.suspicion -2", "public.suspicion +2"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline and leave early.",
+          "effects": ["civilian.suspicion +3", "public.suspicion -1"]
+        }
+      ],
+      "tags": ["work", "alibi"]
+    },
+    {
+      "id": "civ_neighbor_questions",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "civilian.suspicion >= 15"],
+      "text_stub": "A neighbor asks why you are always exhausted.",
+      "choices": [
+        {
+          "id": "dismiss",
+          "text": "Dismiss it as work stress.",
+          "effects": ["civilian.suspicion +1"]
+        },
+        {
+          "id": "confide",
+          "text": "Confide a partial truth.",
+          "effects": ["civilian.suspicion -2", "exposure.risk +2"]
+        }
+      ],
+      "tags": ["neighbors", "risk"]
+    },
+    {
+      "id": "civ_doctor_checkup",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "exposure.risk >= 10"],
+      "text_stub": "A doctor notes unusual healing on your file.",
+      "choices": [
+        {
+          "id": "redirect",
+          "text": "Redirect the conversation.",
+          "effects": ["civilian.suspicion +2"]
+        },
+        {
+          "id": "submit_tests",
+          "text": "Submit to tests.",
+          "effects": ["civilian.suspicion -3", "wanted.level +2"]
+        }
+      ],
+      "tags": ["medical", "risk"]
+    },
+    {
+      "id": "civ_friend_support",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN", "stress >= 5"],
+      "text_stub": "A friend offers support if you open up.",
+      "choices": [
+        {
+          "id": "open_up",
+          "text": "Share a small truth.",
+          "effects": ["civilian.suspicion -2", "exposure.risk +1"]
+        },
+        {
+          "id": "keep_distance",
+          "text": "Keep distance.",
+          "effects": ["civilian.suspicion +1", "stress +1"]
+        }
+      ],
+      "tags": ["support", "stress"]
+    },
+    {
+      "id": "civ_shift_swap",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "persona == CIVILIAN"],
+      "text_stub": "A coworker offers to swap shifts.",
+      "choices": [
+        {
+          "id": "take",
+          "text": "Take the swap to free time.",
+          "effects": ["civilian.suspicion -1", "public.suspicion -1"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline to stay predictable.",
+          "effects": ["civilian.suspicion +1"]
+        }
+      ],
+      "tags": ["work", "schedule"]
+    },
+    {
+      "id": "mask_hotspot_call",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "heat >= 20"],
+      "text_stub": "A hotspot flares. You could arrive fast or stay cautious.",
+      "choices": [
+        {
+          "id": "rush",
+          "text": "Rush in to save civilians.",
+          "effects": ["public.suspicion +3", "reputation +2", "collateral -1"]
+        },
+        {
+          "id": "observe",
+          "text": "Observe from distance.",
+          "effects": ["public.suspicion -1", "reputation -1"]
+        }
+      ],
+      "tags": ["patrol", "heat"]
+    },
+    {
+      "id": "mask_patrol_choice",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED"],
+      "text_stub": "Your route could pass near cameras or through alleys.",
+      "choices": [
+        {
+          "id": "cameras",
+          "text": "Use the camera-rich streets.",
+          "effects": ["public.suspicion +2", "wanted.level +1"]
+        },
+        {
+          "id": "alleys",
+          "text": "Stay in the alleys.",
+          "effects": ["public.suspicion -2", "collateral +1"]
+        }
+      ],
+      "tags": ["patrol", "surveillance"]
+    },
+    {
+      "id": "mask_signature_spike",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "signatures.visible"],
+      "text_stub": "Your last move left a strong trace.",
+      "choices": [
+        {
+          "id": "change_tactics",
+          "text": "Change tactics to reduce traces.",
+          "effects": ["public.suspicion -2", "mastery +1"]
+        },
+        {
+          "id": "ignore",
+          "text": "Ignore and keep pressure.",
+          "effects": ["public.suspicion +3", "wanted.level +1"]
+        }
+      ],
+      "tags": ["signatures", "stealth"]
+    },
+    {
+      "id": "mask_rescue_tradeoff",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "heat >= 30"],
+      "text_stub": "You can stop the threat or evacuate civilians.",
+      "choices": [
+        {
+          "id": "stop_threat",
+          "text": "Stop the threat now.",
+          "effects": ["collateral +2", "reputation +1", "public.suspicion +1"]
+        },
+        {
+          "id": "evacuate",
+          "text": "Evacuate civilians.",
+          "effects": ["collateral -2", "reputation +2", "public.suspicion +2"]
+        }
+      ],
+      "tags": ["rescue", "tradeoff"]
+    },
+    {
+      "id": "mask_patrol_burnout",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "stress >= 5"],
+      "text_stub": "Exhaustion sets in but incidents keep coming.",
+      "choices": [
+        {
+          "id": "push",
+          "text": "Push through.",
+          "effects": ["stress +2", "public.suspicion -1"]
+        },
+        {
+          "id": "pause",
+          "text": "Take a pause and recover.",
+          "effects": ["stress -2", "public.suspicion +1"]
+        }
+      ],
+      "tags": ["burnout", "patrol"]
+    },
+    {
+      "id": "mask_case_pressure",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "case.progress >= 60"],
+      "text_stub": "Investigators are closing in on your signature pattern.",
+      "choices": [
+        {
+          "id": "misdirect",
+          "text": "Create a false trail.",
+          "effects": ["public.suspicion -3", "exposure.risk +1"]
+        },
+        {
+          "id": "lay_low",
+          "text": "Lay low for a few nights.",
+          "effects": ["public.suspicion -2", "heat +1"]
+        }
+      ],
+      "tags": ["cases", "pressure"]
+    },
+    {
+      "id": "mask_public_symbol",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "reputation >= 5"],
+      "text_stub": "A graffiti tag spreads your symbol through the city.",
+      "choices": [
+        {
+          "id": "embrace",
+          "text": "Embrace the symbol.",
+          "effects": ["public.suspicion +2", "reputation +2"]
+        },
+        {
+          "id": "erase",
+          "text": "Erase the tag quietly.",
+          "effects": ["public.suspicion -1", "reputation -1"]
+        }
+      ],
+      "tags": ["reputation", "symbol"]
+    },
+    {
+      "id": "mask_teamup_offer",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "public.suspicion >= 10"],
+      "text_stub": "Another masked figure proposes a team-up.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept the team-up.",
+          "effects": ["public.suspicion +2", "heat -1"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline to stay independent.",
+          "effects": ["public.suspicion -1", "reputation -1"]
+        }
+      ],
+      "tags": ["allies", "teamup"]
+    },
+    {
+      "id": "inst_regulation_notice",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "wanted.level >= 15"],
+      "text_stub": "A new task force announces registration rules.",
+      "choices": [
+        {
+          "id": "comply",
+          "text": "Consider compliance.",
+          "effects": ["public.suspicion -2", "civilian.suspicion +2"]
+        },
+        {
+          "id": "resist",
+          "text": "Resist the policy.",
+          "effects": ["public.suspicion +3", "wanted.level +2"]
+        }
+      ],
+      "tags": ["policy", "pressure"]
+    },
+    {
+      "id": "inst_media_campaign",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "public.suspicion >= 20"],
+      "text_stub": "Media campaigns demand answers about the masked figure.",
+      "choices": [
+        {
+          "id": "stay_silent",
+          "text": "Stay silent.",
+          "effects": ["public.suspicion +2"]
+        },
+        {
+          "id": "leak_story",
+          "text": "Leak a heroic story.",
+          "effects": ["public.suspicion -2", "reputation +1"]
+        }
+      ],
+      "tags": ["media", "pressure"]
+    },
+    {
+      "id": "inst_surveillance_sweep",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "surveillance.level >= 20"],
+      "text_stub": "Authorities increase surveillance in hotspot districts.",
+      "choices": [
+        {
+          "id": "avoid",
+          "text": "Avoid the sweeps.",
+          "effects": ["public.suspicion -2", "heat +1"]
+        },
+        {
+          "id": "challenge",
+          "text": "Challenge the sweep publicly.",
+          "effects": ["public.suspicion +3", "reputation +1"]
+        }
+      ],
+      "tags": ["surveillance", "pressure"]
+    },
+    {
+      "id": "inst_taskforce_contact",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "case.progress >= 75"],
+      "text_stub": "A task force contacts you through intermediaries.",
+      "choices": [
+        {
+          "id": "cooperate",
+          "text": "Cooperate cautiously.",
+          "effects": ["wanted.level -2", "civilian.suspicion +2"]
+        },
+        {
+          "id": "refuse",
+          "text": "Refuse any contact.",
+          "effects": ["wanted.level +3", "public.suspicion +1"]
+        }
+      ],
+      "tags": ["taskforce", "pressure"]
+    },
+    {
+      "id": "mask_unmask_choice",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "persona == MASKED", "exposure.risk >= 20"],
+      "text_stub": "Your mask slips; you can flee or finish the fight.",
+      "choices": [
+        {
+          "id": "flee",
+          "text": "Flee and save your identity.",
+          "effects": ["public.suspicion +2", "civilian.suspicion -2"]
+        },
+        {
+          "id": "fight_on",
+          "text": "Finish the fight.",
+          "effects": ["public.suspicion +4", "civilian.suspicion +3"]
+        }
+      ],
+      "tags": ["identity", "risk"]
+    },
+    {
+      "id": "civ_cover_story",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == HERO", "civilian.suspicion >= 25"],
+      "text_stub": "Someone asks about your recurring injuries.",
+      "choices": [
+        {
+          "id": "cover_story",
+          "text": "Invent a cover story.",
+          "effects": ["civilian.suspicion -3", "stress +1"]
+        },
+        {
+          "id": "ignore",
+          "text": "Ignore the question.",
+          "effects": ["civilian.suspicion +2"]
+        }
+      ],
+      "tags": ["alibi", "injury"]
+    }
+  ]
+}

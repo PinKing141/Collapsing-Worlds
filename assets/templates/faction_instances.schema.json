@@ -1,0 +1,196 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Faction Instances",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "factions"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "factions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/faction_instance"
+      }
+    }
+  },
+  "definitions": {
+    "jurisdiction": {
+      "type": "string",
+      "enum": ["LOCAL", "REGIONAL", "NATIONAL", "GLOBAL", "PLANETARY"]
+    },
+    "signature_type": {
+      "type": "string",
+      "enum": [
+        "VISUAL_ANOMALY",
+        "EM_SPIKE",
+        "THERMAL_BLOOM",
+        "ACOUSTIC_SHOCK",
+        "CHEMICAL_RESIDUE",
+        "BIO_MARKER",
+        "PSYCHIC_ECHO",
+        "DIMENSIONAL_RESIDUE",
+        "GRAVITIC_DISTURBANCE",
+        "ARCANE_RESONANCE",
+        "CAUSAL_IMPRINT",
+        "KINETIC_STRESS",
+        "RADIATION_TRACE"
+      ]
+    },
+    "response_doctrine": {
+      "type": "string",
+      "enum": ["ARREST", "SUPPRESS", "EXPLOIT", "STUDY", "ELIMINATE", "CONTAIN", "DISRUPT"]
+    },
+    "response_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    "response_threshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heat", "level"],
+      "properties": {
+        "heat": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "level": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]+$"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/response_action"
+          }
+        }
+      }
+    },
+    "detection_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signature_types": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/signature_type"
+          }
+        },
+        "heat_min": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "response_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "doctrine": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/response_doctrine"
+          }
+        },
+        "thresholds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/response_threshold"
+          }
+        }
+      }
+    },
+    "location_tag": {
+      "type": "string",
+      "enum": ["PUBLIC", "RESIDENTIAL", "INDUSTRIAL", "HIGH_SECURITY"]
+    },
+    "location_influence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location_id", "influence"],
+      "properties": {
+        "location_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "influence": {
+          "type": "integer"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "location_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "location_tags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/location_tag"
+          }
+        }
+      }
+    },
+    "faction_instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type_id", "jurisdiction"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jurisdiction": {
+          "$ref": "#/definitions/jurisdiction"
+        },
+        "scope": {
+          "$ref": "#/definitions/scope"
+        },
+        "influence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/location_influence"
+          }
+        },
+        "detection_override": {
+          "$ref": "#/definitions/detection_profile"
+        },
+        "response_override": {
+          "$ref": "#/definitions/response_profile"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

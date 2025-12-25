@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "factions": [
+    {
+      "id": "metro_police",
+      "type_id": "civil_law_enforcement",
+      "jurisdiction": "LOCAL",
+      "scope": {
+        "location_tags": ["PUBLIC", "RESIDENTIAL"]
+      },
+      "influence": [
+        { "location_id": 1, "influence": 70 },
+        { "location_id": 2, "influence": 55 },
+        { "location_id": 4, "influence": 40 }
+      ],
+      "tags": ["police", "city"],
+      "notes": "Primary city response force."
+    },
+    {
+      "id": "city_gang",
+      "type_id": "organised_crime",
+      "jurisdiction": "LOCAL",
+      "scope": {
+        "location_tags": ["RESIDENTIAL", "INDUSTRIAL"]
+      },
+      "influence": [
+        { "location_id": 2, "influence": 60 },
+        { "location_id": 3, "influence": 70 }
+      ],
+      "tags": ["gang", "street"]
+    },
+    {
+      "id": "civic_watch",
+      "type_id": "civic_network",
+      "jurisdiction": "LOCAL",
+      "scope": {
+        "location_tags": ["PUBLIC", "RESIDENTIAL"]
+      },
+      "influence": [
+        { "location_id": 1, "influence": 45 },
+        { "location_id": 2, "influence": 50 }
+      ],
+      "tags": ["community"],
+      "notes": "Grassroots observers and shelters."
+    },
+    {
+      "id": "arcane_order",
+      "type_id": "occult_order",
+      "jurisdiction": "LOCAL",
+      "scope": {
+        "location_tags": ["HIGH_SECURITY", "INDUSTRIAL"]
+      },
+      "influence": [
+        { "location_id": 3, "influence": 30 },
+        { "location_id": 4, "influence": 55 }
+      ],
+      "tags": ["occult"]
+    },
+    {
+      "id": "national_agency",
+      "type_id": "metahuman_oversight",
+      "jurisdiction": "NATIONAL",
+      "scope": {
+        "location_tags": ["HIGH_SECURITY"]
+      },
+      "influence": [
+        { "location_id": 4, "influence": 80 }
+      ],
+      "tags": ["agency", "oversight"]
+    },
+    {
+      "id": "mirage_corp",
+      "type_id": "private_conglomerate",
+      "jurisdiction": "REGIONAL",
+      "scope": {
+        "location_tags": ["INDUSTRIAL"]
+      },
+      "influence": [
+        { "location_id": 3, "influence": 75 }
+      ],
+      "tags": ["corporate"]
+    }
+  ]
+}

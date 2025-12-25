@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "storylets": [
+    {
+      "id": "vil_power_grab",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "heat >= 15", "persona == MASKED"],
+      "text_stub": "A power vacuum opens after a crackdown.",
+      "choices": [
+        {
+          "id": "seize",
+          "text": "Seize control of the territory.",
+          "effects": ["heat +3", "wanted.level +2", "reputation +1"]
+        },
+        {
+          "id": "proxy",
+          "text": "Use proxies to take control.",
+          "effects": ["heat +1", "wanted.level +1"]
+        }
+      ],
+      "tags": ["territory", "crime"]
+    },
+    {
+      "id": "vil_recruitment",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "persona == MASKED"],
+      "text_stub": "A desperate criminal offers loyalty for protection.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept the recruit.",
+          "effects": ["influence +2", "heat +1"]
+        },
+        {
+          "id": "reject",
+          "text": "Reject to stay lean.",
+          "effects": ["heat -1"]
+        }
+      ],
+      "tags": ["recruitment", "gang"]
+    },
+    {
+      "id": "vil_media_fear",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VILLAIN", "public.suspicion >= 20"],
+      "text_stub": "Media coverage paints you as a looming threat.",
+      "choices": [
+        {
+          "id": "amplify",
+          "text": "Amplify the fear.",
+          "effects": ["public.suspicion +3", "wanted.level +1"]
+        },
+        {
+          "id": "misdirect",
+          "text": "Misdirect with a decoy.",
+          "effects": ["public.suspicion -2", "heat +1"]
+        }
+      ],
+      "tags": ["media", "fear"]
+    },
+    {
+      "id": "vil_heat_as_cover",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "heat >= 25"],
+      "text_stub": "A citywide alert creates cover for a heist.",
+      "choices": [
+        {
+          "id": "heist",
+          "text": "Launch the heist now.",
+          "effects": ["heat +4", "wanted.level +3", "loot +2"]
+        },
+        {
+          "id": "delay",
+          "text": "Delay and gather intel.",
+          "effects": ["heat -1", "wanted.level -1"]
+        }
+      ],
+      "tags": ["heist", "chaos"]
+    },
+    {
+      "id": "vil_institution_pressure",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VILLAIN", "wanted.level >= 15"],
+      "text_stub": "Authorities add you to a high-priority list.",
+      "choices": [
+        {
+          "id": "brute_force",
+          "text": "Strike back immediately.",
+          "effects": ["heat +3", "wanted.level +2"]
+        },
+        {
+          "id": "lay_low",
+          "text": "Lay low and let heat cool.",
+          "effects": ["heat -2", "wanted.level -1"]
+        }
+      ],
+      "tags": ["pressure", "response"]
+    },
+    {
+      "id": "vil_civilian_cover",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == VILLAIN", "persona == CIVILIAN"],
+      "text_stub": "Your cover identity is invited to a charity gala.",
+      "choices": [
+        {
+          "id": "attend",
+          "text": "Attend and gather influence.",
+          "effects": ["civilian.suspicion -2", "influence +2"]
+        },
+        {
+          "id": "skip",
+          "text": "Skip to avoid exposure.",
+          "effects": ["civilian.suspicion +1", "heat -1"]
+        }
+      ],
+      "tags": ["cover", "influence"]
+    },
+    {
+      "id": "vil_bounty_offer",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "persona == MASKED", "wanted.level >= 10"],
+      "text_stub": "An underworld broker offers a bounty for rivals.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept the bounty.",
+          "effects": ["heat +2", "reputation +1"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline and stay focused.",
+          "effects": ["heat -1"]
+        }
+      ],
+      "tags": ["broker", "bounty"]
+    },
+    {
+      "id": "vil_signature_spike",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == VILLAIN", "persona == MASKED", "signatures.visible"],
+      "text_stub": "Your methods leave a clear signature trail.",
+      "choices": [
+        {
+          "id": "embrace",
+          "text": "Embrace the signature as a calling card.",
+          "effects": ["public.suspicion +3", "reputation +1"]
+        },
+        {
+          "id": "mask",
+          "text": "Mask the signature.",
+          "effects": ["public.suspicion -2", "heat +1"]
+        }
+      ],
+      "tags": ["signatures", "identity"]
+    },
+    {
+      "id": "vil_case_pressure",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VILLAIN", "case.progress >= 60"],
+      "text_stub": "A case begins linking your crimes into a pattern.",
+      "choices": [
+        {
+          "id": "decoy",
+          "text": "Create a decoy incident.",
+          "effects": ["heat +2", "public.suspicion -1"]
+        },
+        {
+          "id": "silence",
+          "text": "Go quiet for a while.",
+          "effects": ["heat -2", "wanted.level -1"]
+        }
+      ],
+      "tags": ["case", "pressure"]
+    },
+    {
+      "id": "vil_rival_gang",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "heat >= 10", "persona == MASKED"],
+      "text_stub": "A rival gang encroaches on your territory.",
+      "choices": [
+        {
+          "id": "strike",
+          "text": "Strike first.",
+          "effects": ["heat +3", "wanted.level +1"]
+        },
+        {
+          "id": "ally",
+          "text": "Propose an alliance.",
+          "effects": ["heat +1", "influence +1"]
+        }
+      ],
+      "tags": ["rival", "territory"]
+    }
+  ]
+}

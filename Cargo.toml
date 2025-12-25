@@ -1,0 +1,13 @@
+[package]
+name = "superhero-universe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# The ECS engine. We disable default features to keep the build minimal and headless.
+# CORRECTED: Changed "multi-threaded" to "multi_threaded"
+bevy_ecs = { version = "0.14", default-features = false, features = ["multi_threaded"] }
+bevy_utils = "0.14" # For tracing/logging utilities if needed later
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rusqlite = { version = "0.31", features = ["bundled"] }

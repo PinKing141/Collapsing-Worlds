@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "storylets": [
+    {
+      "id": "vig_curfew_sweep",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "persona == MASKED", "heat >= 20"],
+      "text_stub": "A curfew sweep locks down the district while you are on patrol.",
+      "choices": [
+        {
+          "id": "hide",
+          "text": "Hide until patrols pass.",
+          "effects": ["public.suspicion -1", "wanted.level +1"]
+        },
+        {
+          "id": "confront",
+          "text": "Confront the sweep.",
+          "effects": ["public.suspicion +3", "wanted.level +3"]
+        }
+      ],
+      "tags": ["curfew", "pressure"]
+    },
+    {
+      "id": "vig_informant_offer",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == MASKED"],
+      "text_stub": "A street informant offers intel for protection.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept and protect them.",
+          "effects": ["wanted.level +1", "public.suspicion +1"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline to stay unseen.",
+          "effects": ["public.suspicion -1"]
+        }
+      ],
+      "tags": ["informant", "street"]
+    },
+    {
+      "id": "vig_police_hostility",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "wanted.level >= 20"],
+      "text_stub": "Police briefings list you as a threat.",
+      "choices": [
+        {
+          "id": "avoid",
+          "text": "Avoid major patrol routes.",
+          "effects": ["public.suspicion -1", "heat +1"]
+        },
+        {
+          "id": "challenge",
+          "text": "Challenge the narrative.",
+          "effects": ["public.suspicion +2", "wanted.level +2"]
+        }
+      ],
+      "tags": ["police", "pressure"]
+    },
+    {
+      "id": "vig_safehouse",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == CIVILIAN"],
+      "text_stub": "A safehouse contact requests supplies.",
+      "choices": [
+        {
+          "id": "deliver",
+          "text": "Deliver supplies quietly.",
+          "effects": ["civilian.suspicion +1", "public.suspicion -1"]
+        },
+        {
+          "id": "delay",
+          "text": "Delay and stay invisible.",
+          "effects": ["civilian.suspicion -1", "public.suspicion +1"]
+        }
+      ],
+      "tags": ["safehouse", "logistics"]
+    },
+    {
+      "id": "vig_gang_fear",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == MASKED", "gang.pressure >= 10"],
+      "text_stub": "Gangs avoid your patrol routes, shifting chaos elsewhere.",
+      "choices": [
+        {
+          "id": "follow",
+          "text": "Follow the chaos trail.",
+          "effects": ["public.suspicion +2", "wanted.level +1"]
+        },
+        {
+          "id": "hold",
+          "text": "Hold the current line.",
+          "effects": ["public.suspicion -1", "heat +1"]
+        }
+      ],
+      "tags": ["gangs", "pressure"]
+    },
+    {
+      "id": "vig_bystander_rumor",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == CIVILIAN", "civilian.suspicion >= 15"],
+      "text_stub": "Bystanders whisper about your late-night disappearances.",
+      "choices": [
+        {
+          "id": "cover",
+          "text": "Offer a cover story.",
+          "effects": ["civilian.suspicion -2", "stress +1"]
+        },
+        {
+          "id": "ignore",
+          "text": "Ignore the rumors.",
+          "effects": ["civilian.suspicion +2"]
+        }
+      ],
+      "tags": ["rumor", "alibi"]
+    },
+    {
+      "id": "vig_patrol_injury",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == MASKED", "stress >= 5"],
+      "text_stub": "An injury slows your patrol.",
+      "choices": [
+        {
+          "id": "push",
+          "text": "Push on regardless.",
+          "effects": ["public.suspicion +2", "wanted.level +1"]
+        },
+        {
+          "id": "recover",
+          "text": "Recover and regroup.",
+          "effects": ["public.suspicion -1", "stress -2"]
+        }
+      ],
+      "tags": ["injury", "patrol"]
+    },
+    {
+      "id": "vig_case_pressure",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "case.progress >= 50"],
+      "text_stub": "Investigators begin linking incidents to a single vigilante.",
+      "choices": [
+        {
+          "id": "misdirect",
+          "text": "Leave a false trail.",
+          "effects": ["public.suspicion -2", "exposure.risk +1"]
+        },
+        {
+          "id": "escalate",
+          "text": "Escalate to stay ahead.",
+          "effects": ["public.suspicion +3", "wanted.level +2"]
+        }
+      ],
+      "tags": ["case", "pressure"]
+    },
+    {
+      "id": "vig_civilian_split",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": ["alignment == VIGILANTE", "persona == CIVILIAN", "exposure.risk >= 10"],
+      "text_stub": "You have to leave a friend waiting to respond to a threat.",
+      "choices": [
+        {
+          "id": "stay",
+          "text": "Stay and keep cover.",
+          "effects": ["public.suspicion +2", "civilian.suspicion -1"]
+        },
+        {
+          "id": "leave",
+          "text": "Leave and respond.",
+          "effects": ["public.suspicion -1", "civilian.suspicion +2"]
+        }
+      ],
+      "tags": ["split", "cover"]
+    },
+    {
+      "id": "vig_media_split",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "public.suspicion >= 15"],
+      "text_stub": "Media brands you a menace and a protector in the same night.",
+      "choices": [
+        {
+          "id": "silence",
+          "text": "Stay silent.",
+          "effects": ["public.suspicion +1"]
+        },
+        {
+          "id": "symbol",
+          "text": "Double down on your symbol.",
+          "effects": ["public.suspicion +2", "reputation +1"]
+        }
+      ],
+      "tags": ["media", "identity"]
+    }
+  ]
+}
