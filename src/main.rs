@@ -15,8 +15,10 @@ use superhero_universe::rules::{
     can_use, use_power, ActorState, CostType, PressureModifiers, TargetContext, UseContext,
     WorldState,
 };
+use superhero_universe::simulation::agents::{
+    tick_agents, AgentEvent, AgentEventLog, AgentRegistry,
+};
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
-use superhero_universe::simulation::agents::{AgentEvent, AgentEventLog, AgentRegistry, tick_agents};
 use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
@@ -38,7 +40,9 @@ use superhero_universe::simulation::origin::{
 use superhero_universe::simulation::pressure::PressureState;
 use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
-use superhero_universe::simulation::storylets::{is_punctuation_storylet, StoryletLibrary};
+use superhero_universe::simulation::storylets::{
+    is_punctuation_storylet, storylet_has_gate_requirements, StoryletLibrary,
+};
 use superhero_universe::simulation::time::GameTime;
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
@@ -64,6 +68,7 @@ use superhero_universe::ui::authoring::render_authoring_dashboard;
 use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 
 const DEFAULT_PUNCTUATION_TURNS: i32 = 2;
+const DEFAULT_PUNCTUATION_COOLDOWN_TURNS: i32 = 3;
 
 fn main() {
     println!("Initializing Superhero Universe (Rules Debug)...");
@@ -422,6 +427,7 @@ fn main() {
                         &city,
                         &evidence,
                         &cases,
+                        &pressure,
                         &game_time,
                     );
                 }
@@ -896,6 +902,7 @@ fn main() {
                     &mut agents,
                     &mut agent_events,
                     &mut persona_stack,
+                    &storylets,
                     alignment,
                     &mut player_pos,
                     &mut game_time,
@@ -1906,6 +1913,7 @@ fn tick_world(
     agents: &mut AgentRegistry,
     agent_events: &mut AgentEventLog,
     persona_stack: &mut PersonaStack,
+    storylets: &StoryletLibrary,
     alignment: Alignment,
     position: &mut Position,
     game_time: &mut GameTime,
@@ -1966,6 +1974,22 @@ fn tick_world(
         update_pressure(pressure, city, scene, cases, game_time);
         apply_civilian_pressure(civilian_state, pressure);
         world.pressure = pressure.to_modifiers();
+        let ctx = build_storylet_context(
+            alignment,
+            persona_stack,
+            city,
+            scene,
+            cases,
+            pressure,
+            game_time,
+        );
+        if let Some(storylet) = select_storylet_for_turn(storylets, alignment, storylet_state, &ctx)
+        {
+            println!(
+                "Storylet triggered: {} | {}",
+                storylet.id, storylet.text_stub
+            );
+        }
         run_region_update(region, city, pressure, city_events, region_events);
         run_global_faction_director(global_faction_director, region, global_faction_events);
     }
@@ -2156,6 +2180,12 @@ struct StoryletContext {
     is_day: bool,
     stress: i32,
     reputation: i32,
+    pressure_identity: i32,
+    pressure_moral: i32,
+    pressure_institutional: i32,
+    pressure_resource: i32,
+    pressure_temporal: i32,
+    pressure_psychological: i32,
 }
 
 struct StoryletEligibility {
@@ -2188,9 +2218,18 @@ fn list_storylets_available(
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
+    pressure: &PressureState,
     game_time: &GameTime,
 ) {
-    let ctx = build_storylet_context(alignment, persona_stack, city, evidence, cases, game_time);
+    let ctx = build_storylet_context(
+        alignment,
+        persona_stack,
+        city,
+        evidence,
+        cases,
+        pressure,
+        game_time,
+    );
     let mut count = 0;
     if storylet_state.punctuation.only {
         println!(
@@ -2198,21 +2237,15 @@ fn list_storylets_available(
             storylet_state.punctuation.remaining_turns
         );
     }
+    if storylet_state.punctuation_cooldown > 0 {
+        println!(
+            "Punctuation cooldown active ({} turns remaining).",
+            storylet_state.punctuation_cooldown
+        );
+    }
     println!("Storylets available:");
     for storylet in library.for_alignment(alignment) {
-        if storylet_state.fired.contains(&storylet.id) {
-            continue;
-        }
-        if storylet_state
-            .cooldowns
-            .get(&storylet.id)
-            .copied()
-            .unwrap_or(0)
-            > 0
-        {
-            continue;
-        }
-        if storylet_state.punctuation.only && !is_punctuation_storylet(storylet) {
+        if !storylet_passes_state_gates(storylet, storylet_state) {
             continue;
         }
         let eval = evaluate_storylet(storylet, &ctx);
@@ -2232,12 +2265,38 @@ fn list_storylets_available(
     }
 }
 
+fn storylet_passes_state_gates(storylet: &Storylet, storylet_state: &StoryletState) -> bool {
+    if storylet_state.fired.contains(&storylet.id) {
+        return false;
+    }
+    if storylet_state
+        .cooldowns
+        .get(&storylet.id)
+        .copied()
+        .unwrap_or(0)
+        > 0
+    {
+        return false;
+    }
+    if !storylet_has_gate_requirements(storylet) {
+        return false;
+    }
+    if storylet_state.punctuation.only && !is_punctuation_storylet(storylet) {
+        return false;
+    }
+    if storylet_state.punctuation_cooldown > 0 && is_punctuation_storylet(storylet) {
+        return false;
+    }
+    true
+}
+
 fn build_storylet_context(
     alignment: Alignment,
     persona_stack: &PersonaStack,
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
+    pressure: &PressureState,
     game_time: &GameTime,
 ) -> StoryletContext {
     let active_persona = persona_stack.active_persona();
@@ -2284,7 +2343,35 @@ fn build_storylet_context(
         is_day: game_time.is_day,
         stress: 0,
         reputation: 0,
+        pressure_identity: pressure.identity.round() as i32,
+        pressure_moral: pressure.moral.round() as i32,
+        pressure_institutional: pressure.institutional.round() as i32,
+        pressure_resource: pressure.resource.round() as i32,
+        pressure_temporal: pressure.temporal.round() as i32,
+        pressure_psychological: pressure.psychological.round() as i32,
     }
+}
+
+fn select_storylet_for_turn<'a>(
+    library: &'a StoryletLibrary,
+    alignment: Alignment,
+    storylet_state: &mut StoryletState,
+    ctx: &StoryletContext,
+) -> Option<&'a Storylet> {
+    for storylet in library.for_alignment(alignment) {
+        if !storylet_passes_state_gates(storylet, storylet_state) {
+            continue;
+        }
+        if !evaluate_storylet(storylet, ctx).eligible {
+            continue;
+        }
+        storylet_state.fired.insert(storylet.id.clone());
+        if is_punctuation_storylet(storylet) {
+            storylet_state.punctuation_cooldown = DEFAULT_PUNCTUATION_COOLDOWN_TURNS;
+        }
+        return Some(storylet);
+    }
+    None
 }
 
 fn evaluate_storylet(storylet: &Storylet, ctx: &StoryletContext) -> StoryletEligibility {
@@ -2391,6 +2478,12 @@ fn numeric_metric(key: &str, ctx: &StoryletContext) -> Option<i32> {
         "case.progress" => Some(ctx.case_progress),
         "stress" => Some(ctx.stress),
         "reputation" => Some(ctx.reputation),
+        "pressure.identity" => Some(ctx.pressure_identity),
+        "pressure.moral" => Some(ctx.pressure_moral),
+        "pressure.institutional" => Some(ctx.pressure_institutional),
+        "pressure.resource" => Some(ctx.pressure_resource),
+        "pressure.temporal" => Some(ctx.pressure_temporal),
+        "pressure.psychological" => Some(ctx.pressure_psychological),
         _ => None,
     }
 }
@@ -2485,7 +2578,10 @@ fn print_origin_path_status(state: &OriginQuestState, catalog: &OriginPathCatalo
     };
     println!("Origin path: {} - {}", path.label, path.summary);
     if state.completed {
-        println!("  status: complete ({} stages)", state.completed_stages.len());
+        println!(
+            "  status: complete ({} stages)",
+            state.completed_stages.len()
+        );
         return;
     }
     if let Some(stage) = current_origin_stage(state, catalog) {
@@ -2518,14 +2614,13 @@ fn apply_origin_rewards(rewards: &[OriginStageReward], pressure: &mut PressureSt
                 (pressure.temporal + reward.pressure_delta.temporal).clamp(0.0, 100.0);
             pressure.identity =
                 (pressure.identity + reward.pressure_delta.identity).clamp(0.0, 100.0);
-            pressure.institutional = (pressure.institutional
-                + reward.pressure_delta.institutional)
-                .clamp(0.0, 100.0);
+            pressure.institutional =
+                (pressure.institutional + reward.pressure_delta.institutional).clamp(0.0, 100.0);
             pressure.moral = (pressure.moral + reward.pressure_delta.moral).clamp(0.0, 100.0);
             pressure.resource =
                 (pressure.resource + reward.pressure_delta.resource).clamp(0.0, 100.0);
-            pressure.psychological = (pressure.psychological + reward.pressure_delta.psychological)
-                .clamp(0.0, 100.0);
+            pressure.psychological =
+                (pressure.psychological + reward.pressure_delta.psychological).clamp(0.0, 100.0);
             println!("Origin reward: pressure updated.");
         }
         if !reward.mutation_tags.is_empty() {
