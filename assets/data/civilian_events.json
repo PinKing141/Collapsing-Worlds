@@ -51,6 +51,172 @@
           "effects": ["support:-5", "strain:+6", "obligation:+4"]
         }
       ]
+    },
+    {
+      "id": "civilian_job_offer",
+      "title": "A Better Offer",
+      "text_stub": "A recruiter calls with a new role that could put your career on a faster track, but it comes with longer hours.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Take the offer and reset your priorities.",
+          "effects": [
+            "job:employed",
+            "job_role:journalist",
+            "job_level:+1",
+            "wage:+10",
+            "career:+6",
+            "strain:+4"
+          ]
+        },
+        {
+          "id": "decline",
+          "text": "Stay where you are and protect your balance.",
+          "effects": ["career:-3", "job_satisfaction:+4", "support:+2"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_deadline_crunch",
+      "title": "Deadline Crunch",
+      "text_stub": "Your team is behind schedule. Picking up extra work could stabilize your position, but it will drain you.",
+      "choices": [
+        {
+          "id": "push",
+          "text": "Lean in and carry the workload.",
+          "effects": ["cash:+20", "job_stability:+6", "career:+4", "strain:+6"]
+        },
+        {
+          "id": "set_limits",
+          "text": "Protect your energy and set limits.",
+          "effects": ["job_stability:-4", "job_satisfaction:+3", "support:+1"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_side_gig",
+      "title": "Side Gig Opportunity",
+      "text_stub": "A freelance offer arrives. It could add income and contacts, but it will eat into your nights.",
+      "choices": [
+        {
+          "id": "take",
+          "text": "Take the gig and expand your reach.",
+          "effects": [
+            "income_boost:+8",
+            "cash:+15",
+            "career:+3",
+            "contact:Rowan:acquaintance",
+            "relationship:Rowan:+5",
+            "strain:+3"
+          ]
+        },
+        {
+          "id": "pass",
+          "text": "Decline and keep your evenings clear.",
+          "effects": ["job_satisfaction:+2", "support:+2"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_social_favor",
+      "title": "Call in a Favor",
+      "text_stub": "A friend asks for help with a delicate situation. Showing up could deepen the bond, but it may expose you.",
+      "choices": [
+        {
+          "id": "show",
+          "text": "Offer help and keep it discreet.",
+          "effects": [
+            "contact:Casey:friend",
+            "relationship:Casey:+8",
+            "support:+4",
+            "obligation:+4",
+            "media:+2"
+          ]
+        },
+        {
+          "id": "decline",
+          "text": "Politely decline and focus on your own load.",
+          "effects": ["support:-3", "relationship:Casey:-6", "strain:+2"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_trust_test",
+      "title": "Trust Test",
+      "text_stub": "A close contact needs to know if they can rely on you. The answer shapes how deep the relationship goes.",
+      "choices": [
+        {
+          "id": "confide",
+          "text": "Share more than usual.",
+          "effects": [
+            "contact:Marisol:confidant",
+            "relationship:Marisol:+10",
+            "support:+5",
+            "media:+3"
+          ]
+        },
+        {
+          "id": "deflect",
+          "text": "Hold your cards close.",
+          "effects": ["relationship:Marisol:-4", "strain:+2", "safehouse:+4"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_community_meeting",
+      "title": "Community Meeting",
+      "text_stub": "Neighbors gather to discuss safety and resources. Your presence could unlock new access, or it could be a time sink.",
+      "choices": [
+        {
+          "id": "attend",
+          "text": "Attend and volunteer for follow-up.",
+          "effects": ["community:+8", "access:+6", "safehouse:+4", "strain:+2"]
+        },
+        {
+          "id": "skip",
+          "text": "Skip it and keep your schedule open.",
+          "effects": ["community:-3", "job_satisfaction:+2"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_civic_protest",
+      "title": "Civic Protest",
+      "text_stub": "A peaceful protest gains momentum downtown. Joining could raise your profile and shape policy.",
+      "choices": [
+        {
+          "id": "join",
+          "text": "Join the march and speak up.",
+          "effects": ["community:+5", "media:+7", "access:+2", "strain:+4"]
+        },
+        {
+          "id": "support_remote",
+          "text": "Support from a distance.",
+          "effects": ["community:+3", "media:+2", "safehouse:+2"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_safehouse_tip",
+      "title": "Safehouse Tip",
+      "text_stub": "A trusted neighbor offers a safe place to lay low if needed. It could reduce risk but also adds another obligation.",
+      "choices": [
+        {
+          "id": "accept",
+          "text": "Accept the offer and set ground rules.",
+          "effects": [
+            "contact:Nyx:ally",
+            "relationship:Nyx:+6",
+            "safehouse:+10",
+            "obligation:+3"
+          ]
+        },
+        {
+          "id": "decline",
+          "text": "Decline to keep things simple.",
+          "effects": ["relationship:Nyx:-4", "strain:-1"]
+        }
+      ]
     }
   ]
 }
