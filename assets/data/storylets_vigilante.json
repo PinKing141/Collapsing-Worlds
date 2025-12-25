@@ -137,7 +137,11 @@
     {
       "id": "vig_case_pressure",
       "category": "INSTITUTIONAL_PRESSURE",
-      "preconditions": ["alignment == VIGILANTE", "case.progress >= 50"],
+      "preconditions": [
+        "alignment == VIGILANTE",
+        "case.progress >= 50",
+        "pressure.institutional >= 20"
+      ],
       "text_stub": "Investigators begin linking incidents to a single vigilante.",
       "choices": [
         {
@@ -175,7 +179,11 @@
     {
       "id": "vig_media_split",
       "category": "INSTITUTIONAL_PRESSURE",
-      "preconditions": ["alignment == VIGILANTE", "public.suspicion >= 15"],
+      "preconditions": [
+        "alignment == VIGILANTE",
+        "public.suspicion >= 15",
+        "pressure.identity >= 25"
+      ],
       "text_stub": "Media brands you a menace and a protector in the same night.",
       "choices": [
         {

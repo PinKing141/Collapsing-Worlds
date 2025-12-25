@@ -251,7 +251,12 @@
     {
       "id": "mask_case_pressure",
       "category": "MASKED_LIFE",
-      "preconditions": ["alignment == HERO", "persona == MASKED", "case.progress >= 60"],
+      "preconditions": [
+        "alignment == HERO",
+        "persona == MASKED",
+        "case.progress >= 60",
+        "pressure.institutional >= 25"
+      ],
       "text_stub": "Investigators are closing in on your signature pattern.",
       "choices": [
         {
@@ -327,7 +332,11 @@
     {
       "id": "inst_media_campaign",
       "category": "INSTITUTIONAL_PRESSURE",
-      "preconditions": ["alignment == HERO", "public.suspicion >= 20"],
+      "preconditions": [
+        "alignment == HERO",
+        "public.suspicion >= 20",
+        "pressure.moral >= 20"
+      ],
       "text_stub": "Media campaigns demand answers about the masked figure.",
       "choices": [
         {
@@ -384,7 +393,12 @@
     {
       "id": "mask_unmask_choice",
       "category": "MASKED_LIFE",
-      "preconditions": ["alignment == HERO", "persona == MASKED", "exposure.risk >= 20"],
+      "preconditions": [
+        "alignment == HERO",
+        "persona == MASKED",
+        "exposure.risk >= 20",
+        "pressure.identity >= 30"
+      ],
       "text_stub": "Your mask slips; you can flee or finish the fight.",
       "choices": [
         {
