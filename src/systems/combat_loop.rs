@@ -3,7 +3,10 @@ use crate::rules::mastery::MasteryStage;
 use crate::rules::power::ExpressionId;
 use crate::rules::signature::{SignatureInstance, SignatureSpec, SignatureType};
 use crate::rules::use_power::{use_power, ActorState, TargetContext, UseContext, UseError, WorldState};
-use crate::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatSide, CombatState, Combatant};
+use crate::simulation::combat::{
+    CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatSide,
+    CombatState, Combatant,
+};
 use crate::simulation::city::LocationId;
 
 #[derive(Debug)]
@@ -238,6 +241,127 @@ pub fn resolve_combat(state: &mut CombatState) -> Option<CombatEnd> {
     }
     finish_combat(state, CombatEnd::Resolved);
     Some(CombatEnd::Resolved)
+}
+
+pub fn combat_end_consequences(end: CombatEnd, scale: CombatScale) -> CombatConsequences {
+    let (strength, persistence) = match scale {
+        CombatScale::Street => (18, 4),
+        CombatScale::District => (24, 5),
+        CombatScale::City => (30, 6),
+        CombatScale::National => (38, 7),
+        CombatScale::Cosmic => (46, 8),
+    };
+
+    let signatures = match end {
+        CombatEnd::PlayerEscaped => vec![
+            SignatureSpec {
+                signature_type: SignatureType::AcousticShock,
+                strength,
+                persistence_turns: persistence,
+            },
+            SignatureSpec {
+                signature_type: SignatureType::VisualAnomaly,
+                strength: strength.saturating_sub(6),
+                persistence_turns: persistence,
+            },
+        ],
+        CombatEnd::PlayerDefeated => vec![
+            SignatureSpec {
+                signature_type: SignatureType::BioMarker,
+                strength,
+                persistence_turns: persistence + 1,
+            },
+            SignatureSpec {
+                signature_type: SignatureType::KineticStress,
+                strength: strength.saturating_sub(4),
+                persistence_turns: persistence,
+            },
+        ],
+        CombatEnd::OpponentsDefeated => vec![
+            SignatureSpec {
+                signature_type: SignatureType::KineticStress,
+                strength,
+                persistence_turns: persistence,
+            },
+            SignatureSpec {
+                signature_type: SignatureType::VisualAnomaly,
+                strength: strength.saturating_sub(8),
+                persistence_turns: persistence,
+            },
+        ],
+        CombatEnd::Resolved => vec![
+            SignatureSpec {
+                signature_type: SignatureType::CausalImprint,
+                strength,
+                persistence_turns: persistence + 1,
+            },
+            SignatureSpec {
+                signature_type: SignatureType::PsychicEcho,
+                strength: strength.saturating_sub(10),
+                persistence_turns: persistence,
+            },
+        ],
+    };
+
+    let scale_factor = match scale {
+        CombatScale::Street => 1.0,
+        CombatScale::District => 1.2,
+        CombatScale::City => 1.4,
+        CombatScale::National => 1.7,
+        CombatScale::Cosmic => 2.0,
+    };
+
+    let base_delta = match end {
+        CombatEnd::PlayerEscaped => CombatPressureDelta {
+            temporal: 1.5,
+            identity: 1.2,
+            institutional: 0.6,
+            moral: 0.5,
+            resource: 0.3,
+            psychological: 1.0,
+        },
+        CombatEnd::PlayerDefeated => CombatPressureDelta {
+            temporal: 0.8,
+            identity: 2.8,
+            institutional: 1.6,
+            moral: 2.2,
+            resource: 0.9,
+            psychological: 2.6,
+        },
+        CombatEnd::OpponentsDefeated => CombatPressureDelta {
+            temporal: 0.7,
+            identity: 1.8,
+            institutional: 1.3,
+            moral: 1.9,
+            resource: 0.6,
+            psychological: 0.8,
+        },
+        CombatEnd::Resolved => CombatPressureDelta {
+            temporal: 0.6,
+            identity: 1.0,
+            institutional: 1.4,
+            moral: 0.9,
+            resource: 1.1,
+            psychological: 0.7,
+        },
+    };
+
+    let pressure_delta = CombatPressureDelta {
+        temporal: base_delta.temporal * scale_factor,
+        identity: base_delta.identity * scale_factor,
+        institutional: base_delta.institutional * scale_factor,
+        moral: base_delta.moral * scale_factor,
+        resource: base_delta.resource * scale_factor,
+        psychological: base_delta.psychological * scale_factor,
+    };
+
+    CombatConsequences {
+        signatures: signatures
+            .into_iter()
+            .map(SignatureSpec::to_instance)
+            .collect(),
+        pressure_delta,
+    }
 }
 
 fn finalize_signatures(scale: CombatScale, mut result: CombatTickResult) -> CombatTickResult {
