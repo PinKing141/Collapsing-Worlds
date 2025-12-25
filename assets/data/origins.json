@@ -1,0 +1,210 @@
+{
+  "origins": [
+    {
+      "id": "mutant",
+      "label": "Mutant",
+      "class_code": "ASCENDANT",
+      "subtype_code": "GENETIC",
+      "summary": "Born with latent mutations that awaken under stress or growth spurts.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "PUBERTY",
+          "delivery_channel": "BIOLOGY",
+          "notes": "Powers surface alongside developmental milestones."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 1,
+        "mutation_tags": ["GENETIC_MUTATION", "CELLULAR_ADAPTATION"],
+        "reputation_delta": 4,
+        "pressure_delta": {
+          "identity": 6.0,
+          "psychological": 3.0
+        },
+        "signatures": [
+          {
+            "signature_type": "BIO_MARKER",
+            "strength": 12,
+            "persistence_turns": 8
+          }
+        ]
+      }
+    },
+    {
+      "id": "experiment",
+      "label": "Experiment",
+      "class_code": "ALTERED",
+      "subtype_code": "EXPOSURE",
+      "summary": "A controlled or catastrophic experiment rewrote biology and unlocked new capabilities.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "LAB_ACCIDENT",
+          "delivery_channel": "ACCIDENT",
+          "notes": "Lab accident, injection, or field test goes wrong."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 1,
+        "mutation_tags": ["ENGINEERED_ALTERATION", "CHEMICAL_REWRITE"],
+        "reputation_delta": 2,
+        "pressure_delta": {
+          "identity": 8.0,
+          "institutional": 5.0
+        },
+        "signatures": [
+          {
+            "signature_type": "CHEMICAL_RESIDUE",
+            "strength": 14,
+            "persistence_turns": 6
+          },
+          {
+            "signature_type": "THERMAL_BLOOM",
+            "strength": 8,
+            "persistence_turns": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "artifact",
+      "label": "Artifact",
+      "class_code": "BOUND",
+      "subtype_code": "ARTEFACT",
+      "summary": "A relic or device anchors power, binding it to an object with its own rules.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "RELIC_DISCOVERY",
+          "delivery_channel": "ARTEFACT",
+          "notes": "Unearthed or inherited an object of power."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 0,
+        "mutation_tags": [],
+        "reputation_delta": 3,
+        "pressure_delta": {
+          "resource": 5.0,
+          "institutional": 4.0
+        },
+        "signatures": [
+          {
+            "signature_type": "ARCANE_RESONANCE",
+            "strength": 10,
+            "persistence_turns": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "alien",
+      "label": "Alien",
+      "class_code": "ASCENDANT",
+      "subtype_code": "XENOBIO",
+      "summary": "Power is rooted in an off-world physiology or culture; abilities are natural to the species.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "ARRIVAL",
+          "delivery_channel": "BIOLOGY",
+          "notes": "Capabilities manifest under Earthlike conditions."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 0,
+        "mutation_tags": ["XENOBIOLOGY"],
+        "reputation_delta": 6,
+        "pressure_delta": {
+          "identity": 4.0,
+          "institutional": 6.0
+        },
+        "signatures": [
+          {
+            "signature_type": "EM_SPIKE",
+            "strength": 9,
+            "persistence_turns": 5
+          },
+          {
+            "signature_type": "RADIATION_TRACE",
+            "strength": 6,
+            "persistence_turns": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "cosmic",
+      "label": "Cosmic",
+      "class_code": "ASCENDANT",
+      "subtype_code": "ARCHETYPAL",
+      "summary": "Chosen or altered by a vast cosmic force, embodying a higher-order archetype.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "COSMIC_AWAKENING",
+          "delivery_channel": "PHENOMENON",
+          "notes": "Encountered a cosmic entity or reality fracture."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 0,
+        "mutation_tags": ["COSMIC_IMPRINT"],
+        "reputation_delta": 8,
+        "pressure_delta": {
+          "moral": 6.0,
+          "psychological": 5.0
+        },
+        "signatures": [
+          {
+            "signature_type": "DIMENSIONAL_RESIDUE",
+            "strength": 12,
+            "persistence_turns": 8
+          },
+          {
+            "signature_type": "CAUSAL_IMPRINT",
+            "strength": 7,
+            "persistence_turns": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "engineered",
+      "label": "Engineered",
+      "class_code": "FORGED",
+      "subtype_code": "ENGINEERED",
+      "summary": "Technology, cybernetics, or crafted systems supply the core abilities.",
+      "acquisition_hooks": [
+        {
+          "event_kind": "UPGRADE",
+          "delivery_channel": "TECH",
+          "notes": "Built, bought, or assembled the core tech suite."
+        }
+      ],
+      "effects": {
+        "initial_power_count": 1,
+        "initial_mutation_count": 0,
+        "mutation_tags": ["CYBERNETIC_INTEGRATION"],
+        "reputation_delta": 1,
+        "pressure_delta": {
+          "resource": 7.0,
+          "institutional": 3.0
+        },
+        "signatures": [
+          {
+            "signature_type": "EM_SPIKE",
+            "strength": 11,
+            "persistence_turns": 5
+          },
+          {
+            "signature_type": "KINETIC_STRESS",
+            "strength": 6,
+            "persistence_turns": 4
+          }
+        ]
+      }
+    }
+  ]
+}

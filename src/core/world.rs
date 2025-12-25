@@ -12,6 +12,7 @@ use crate::core::serialization::{
     apply_state_to_world, extract_state_from_world, load_state_from_path, save_state_to_path, SaveState,
 };
 use crate::simulation::time::GameTime;
+use crate::simulation::origin::assign_origin_for_player;
 use crate::systems::combat::CombatLog;
 
 /// Intent-driven commands fed into the ECS each tick.
@@ -64,6 +65,7 @@ impl Game {
         let mut world = create_world(seed);
         let player_uid = allocate_entity_id(&mut world);
         let player = spawn_player(&mut world, player_uid);
+        assign_origin_for_player(&mut world, player, seed);
         spawn_demo_npcs(&mut world);
         let schedule = create_schedule();
 
