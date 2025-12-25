@@ -12,7 +12,8 @@ use crate::simulation::cast::{
     CharacterPersona, CharacterPower, CharacterRelationship, CharacterRole, PersistentCharacter,
     PromotionCandidate,
 };
-use crate::simulation::city::{CityState, HeatResponse, LocationId, LocationState, LocationTag};
+use crate::simulation::city::{CityId, CityState, HeatResponse, LocationId, LocationState, LocationTag};
+use crate::simulation::region::{ContinentId, CountryId, RegionId};
 use crate::simulation::growth::{ExpressionMastery, GrowthState, Reputation};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
@@ -1096,6 +1097,10 @@ impl WorldDb {
         }
 
         Ok(CityState {
+            city_id: CityId(1),
+            region_id: RegionId(1),
+            country_id: CountryId(1),
+            continent_id: ContinentId(1),
             locations,
             active_location: LocationId(1),
         })
