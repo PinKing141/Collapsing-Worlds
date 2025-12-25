@@ -3,9 +3,10 @@ pub mod components;
 pub mod content;
 pub mod core;
 pub mod data;
+pub mod rules;
 pub mod simulation;
 pub mod systems;
-pub mod rules;
+pub mod ui;
 pub mod world;
 
 // Expose the main Game wrapper and types needed for interaction

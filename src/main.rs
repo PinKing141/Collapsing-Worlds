@@ -2,53 +2,63 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use superhero_universe::components::persona::{hero_persona_stack, Alignment, PersonaStack, PersonaType};
+use superhero_universe::components::persona::{
+    hero_persona_stack, Alignment, PersonaStack, PersonaType,
+};
 use superhero_universe::components::world::Position;
-use superhero_universe::core::world::ActionIntent;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
+use superhero_universe::core::world::ActionIntent;
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
+use superhero_universe::data::nemesis::load_nemesis_action_catalog;
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
-use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 use superhero_universe::rules::{
     can_use, use_power, ActorState, CostType, PressureModifiers, TargetContext, UseContext,
     WorldState,
 };
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
+use superhero_universe::simulation::city::{CityEventLog, CityState};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
-use superhero_universe::simulation::city::{CityEventLog, CityState};
 use superhero_universe::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatState};
+use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
 };
 use superhero_universe::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
+use superhero_universe::simulation::origin::load_origin_catalog;
 use superhero_universe::simulation::pressure::PressureState;
 use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
-use superhero_universe::simulation::storylets::StoryletLibrary;
+use superhero_universe::simulation::storylets::{is_punctuation_storylet, StoryletLibrary};
 use superhero_universe::simulation::time::GameTime;
-use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
     combat_tick, force_escalate, force_escape, resolve_combat, start_combat,
 };
-use superhero_universe::systems::event_resolver::{resolve_faction_events, ResolvedFactionEventLog};
-use superhero_universe::systems::faction::{run_faction_director, FactionDirector, FactionEventLog};
+use superhero_universe::systems::event_resolver::{
+    resolve_faction_events, ResolvedFactionEventLog,
+};
+use superhero_universe::systems::faction::{
+    run_faction_director, FactionDirector, FactionEventLog,
+};
 use superhero_universe::systems::heat::{apply_signatures, decay_heat, WorldEventLog};
 use superhero_universe::systems::persona::{attempt_switch, PersonaSwitchError};
 use superhero_universe::systems::pressure::update_pressure;
 use superhero_universe::systems::region::{
-    run_global_faction_director, run_region_update, GlobalFactionDirector,
-    GlobalFactionEventLog,
+    run_global_faction_director, run_region_update, GlobalFactionDirector, GlobalFactionEventLog,
 };
 use superhero_universe::systems::suspicion::apply_suspicion_for_intents;
 use superhero_universe::systems::units::update_units;
+use superhero_universe::ui::authoring::render_authoring_dashboard;
+use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
+
+const DEFAULT_PUNCTUATION_TURNS: i32 = 2;
 
 fn main() {
-    println!("Initializing Superhero Universe (Rules Debug)...");    
+    println!("Initializing Superhero Universe (Rules Debug)...");
     let (content_db_path, world_db_path) = parse_paths(env::args().collect());
     if !content_db_path.exists() {
         eprintln!(
@@ -140,11 +150,15 @@ fn main() {
         &mut city_events,
         &mut region_events,
     );
-    run_global_faction_director(&mut global_faction_director, &region, &mut global_faction_events);
+    run_global_faction_director(
+        &mut global_faction_director,
+        &region,
+        &mut global_faction_events,
+    );
 
     let civilian_events = load_civilian_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -164,7 +178,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -270,15 +284,12 @@ fn main() {
                     let expr_id = ExpressionId(expr_raw.to_string());
                     match repo.expression(&expr_id) {
                         Ok(expr) => {
-    let mut ctx = UseContext {
-        actor: &mut actor,
-        world: &world,
-        mastery: growth
-            .mastery
-            .get(&expr.id)
-            .map(|entry| entry.stage),
-        unlocked: Some(&growth.unlocked_expressions),
-    };
+                            let mut ctx = UseContext {
+                                actor: &mut actor,
+                                world: &world,
+                                mastery: growth.mastery.get(&expr.id).map(|entry| entry.stage),
+                                unlocked: Some(&growth.unlocked_expressions),
+                            };
                             match can_use(&ctx, &expr, &target) {
                                 Ok(_) => match use_power(&mut ctx, &expr, &target) {
                                     Ok(result) => {
@@ -305,7 +316,13 @@ fn main() {
                                             &player_pos,
                                             &mut event_log,
                                         );
-                                        update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                        update_pressure(
+                                            &mut pressure,
+                                            &city,
+                                            &evidence,
+                                            &cases,
+                                            &game_time,
+                                        );
                                         apply_civilian_pressure(&civilian_state, &mut pressure);
                                         world.pressure = pressure.to_modifiers();
                                         run_region_update(
@@ -385,6 +402,71 @@ fn main() {
                     );
                 }
             }
+            "punctuation" => {
+                let action = parts.next();
+                match action {
+                    None => {
+                        if storylet_state.punctuation.only {
+                            println!(
+                                "Punctuation layer: ON ({} turns remaining)",
+                                storylet_state.punctuation.remaining_turns
+                            );
+                        } else {
+                            println!("Punctuation layer: OFF");
+                        }
+                    }
+                    Some("off") => {
+                        storylet_state.punctuation.clear();
+                        println!("Punctuation layer disabled.");
+                    }
+                    Some("on") => {
+                        let turns = parts
+                            .next()
+                            .and_then(|raw| raw.parse::<i32>().ok())
+                            .unwrap_or(DEFAULT_PUNCTUATION_TURNS);
+                        storylet_state.punctuation.activate(turns);
+                        println!(
+                            "Punctuation layer enabled for {} turns.",
+                            storylet_state.punctuation.remaining_turns
+                        );
+                    }
+                    Some(raw) => {
+                        if let Ok(turns) = raw.parse::<i32>() {
+                            storylet_state.punctuation.activate(turns);
+                            println!(
+                                "Punctuation layer enabled for {} turns.",
+                                storylet_state.punctuation.remaining_turns
+                            );
+                        } else {
+                            println!("Usage: punctuation <on|off|turns>");
+                        }
+                    }
+                }
+            }
+            "author" => {
+                let origin_catalog = match load_origin_catalog("./assets/data/origins.json") {
+                    Ok(catalog) => catalog,
+                    Err(err) => {
+                        println!("Failed to load origins: {}", err);
+                        continue;
+                    }
+                };
+                let nemesis_catalog =
+                    match load_nemesis_action_catalog("./assets/data/nemesis_actions.json") {
+                        Ok(catalog) => catalog,
+                        Err(err) => {
+                            println!("Failed to load nemesis actions: {}", err);
+                            continue;
+                        }
+                    };
+                let panel = render_authoring_dashboard(
+                    &storylets,
+                    &civilian_events,
+                    &origin_catalog,
+                    &nemesis_catalog,
+                );
+                println!("{}", panel);
+            }
             "civilian" => {
                 let sub = parts.next();
                 match sub {
@@ -463,7 +545,8 @@ fn main() {
                         if !combat.active {
                             println!("No active combat. Use `combat start <label>` first.");
                         } else if let Some(expr_raw) = parts.next() {
-                            combat.pending_player_expression = Some(ExpressionId(expr_raw.to_string()));
+                            combat.pending_player_expression =
+                                Some(ExpressionId(expr_raw.to_string()));
                             println!("Queued expression {} for combat.", expr_raw);
                         } else {
                             println!("Usage: combat use <expression_id>");
@@ -570,7 +653,13 @@ fn main() {
                                 game_time.advance();
                                 tick_civilian_life(&mut civilian_state, &game_time);
                                 storylet_state.tick();
-                                update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                update_pressure(
+                                    &mut pressure,
+                                    &city,
+                                    &evidence,
+                                    &cases,
+                                    &game_time,
+                                );
                                 apply_civilian_pressure(&civilian_state, &mut pressure);
                                 world.pressure = pressure.to_modifiers();
                                 run_region_update(
@@ -876,9 +965,7 @@ fn print_use_result(result: &superhero_universe::rules::UseResult) {
         for sig in &result.emitted_signatures {
             println!(
                 "  {:?} strength={} persistence={}",
-                sig.signature.signature_type,
-                sig.signature.strength,
-                sig.remaining_turns
+                sig.signature.signature_type, sig.signature.strength, sig.remaining_turns
             );
         }
     }
@@ -1069,7 +1156,11 @@ fn handle_switch(
         println!("Unknown location.");
         return;
     };
-    let witnesses = if target.in_public { target.witnesses } else { 0 };
+    let witnesses = if target.in_public {
+        target.witnesses
+    } else {
+        0
+    };
     let has_visual = evidence.signatures.iter().any(|event| {
         event.location_id == location_id
             && event.signature.signature.signature_type
@@ -1296,7 +1387,10 @@ fn print_pending_civilian_events(
                 }
             }
             None => {
-                println!("  {} | (missing definition) | queued {} ticks ago", event.storylet_id, age);
+                println!(
+                    "  {} | (missing definition) | queued {} ticks ago",
+                    event.storylet_id, age
+                );
             }
         }
     }
@@ -1312,7 +1406,11 @@ fn resolve_civilian_event(
         println!("Unknown civilian event: {}", event_id);
         return;
     };
-    let Some(choice) = event_def.choices.iter().find(|choice| choice.id == choice_id) else {
+    let Some(choice) = event_def
+        .choices
+        .iter()
+        .find(|choice| choice.id == choice_id)
+    else {
         println!("Unknown choice {} for event {}", choice_id, event_id);
         return;
     };
@@ -1355,11 +1453,16 @@ fn record_identity_evidence(
     let (surveillance, in_public) = city
         .locations
         .get(&location_id)
-        .map(|loc| (loc.surveillance_level, loc.tags.contains(&superhero_universe::simulation::city::LocationTag::Public)))
+        .map(|loc| {
+            (
+                loc.surveillance_level,
+                loc.tags
+                    .contains(&superhero_universe::simulation::city::LocationTag::Public),
+            )
+        })
         .unwrap_or((0, true));
     let witness_count = if in_public { witnesses.max(1) } else { 0 };
-    let visual_quality = (surveillance as i32 + (witness_count as i32 * 10))
-        .clamp(0, 100) as u8;
+    let visual_quality = (surveillance as i32 + (witness_count as i32 * 10)).clamp(0, 100) as u8;
     for sig in signatures {
         identity.record(
             location_id,
@@ -1543,9 +1646,7 @@ fn transformation_text(state: TransformationState) -> &'static str {
         TransformationState::Ascension => {
             "Your power crests. The world bends to the new gravity you carry."
         }
-        TransformationState::Exile => {
-            "Faction attention becomes a net. Retreat to survive."
-        }
+        TransformationState::Exile => "Faction attention becomes a net. Retreat to survive.",
     }
 }
 
@@ -1578,7 +1679,10 @@ fn print_use_error(
         superhero_universe::rules::UseError::ConstraintFailed(reason) => {
             println!(
                 "Constraint: {} | requires_los={} requires_contact={} range_m={:?}",
-                reason, expr.constraints.requires_los, expr.constraints.requires_contact, expr.constraints.range_m
+                reason,
+                expr.constraints.requires_los,
+                expr.constraints.requires_contact,
+                expr.constraints.range_m
             );
             println!(
                 "Context: dist_m={:?} los={} contact={}",
@@ -1701,10 +1805,7 @@ fn list_storylets_all(library: &StoryletLibrary, alignment: Alignment) {
         } else {
             storylet.preconditions.join(" & ")
         };
-        println!(
-            "  {} | {:?} | {}",
-            storylet.id, storylet.category, prereqs
-        );
+        println!("  {} | {:?} | {}", storylet.id, storylet.category, prereqs);
     }
 }
 
@@ -1718,15 +1819,14 @@ fn list_storylets_available(
     cases: &CaseRegistry,
     game_time: &GameTime,
 ) {
-    let ctx = build_storylet_context(
-        alignment,
-        persona_stack,
-        city,
-        evidence,
-        cases,
-        game_time,
-    );
+    let ctx = build_storylet_context(alignment, persona_stack, city, evidence, cases, game_time);
     let mut count = 0;
+    if storylet_state.punctuation.only {
+        println!(
+            "Punctuation layer active ({} turns remaining).",
+            storylet_state.punctuation.remaining_turns
+        );
+    }
     println!("Storylets available:");
     for storylet in library.for_alignment(alignment) {
         if storylet_state.fired.contains(&storylet.id) {
@@ -1739,6 +1839,9 @@ fn list_storylets_available(
             .unwrap_or(0)
             > 0
         {
+            continue;
+        }
+        if storylet_state.punctuation.only && !is_punctuation_storylet(storylet) {
             continue;
         }
         let eval = evaluate_storylet(storylet, &ctx);
@@ -1943,7 +2046,11 @@ fn print_tick_summary(
     let location = city.locations.get(&city.active_location);
     let (heat, response, crime) = location
         .map(|loc| (loc.heat, loc.response, loc.crime_pressure))
-        .unwrap_or((0, superhero_universe::simulation::city::HeatResponse::None, 0));
+        .unwrap_or((
+            0,
+            superhero_universe::simulation::city::HeatResponse::None,
+            0,
+        ));
     println!(
         "Turn {} | heat={} response={:?} crime_pressure={}",
         world.turn, heat, response, crime

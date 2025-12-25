@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
 use crate::components::persona::Alignment;
-use crate::data::storylets::Storylet;
+use crate::data::storylets::{Storylet, StoryletCategory};
 
 #[derive(Resource, Debug, Default, Clone)]
 pub struct StoryletLibrary {
@@ -18,4 +18,18 @@ impl StoryletLibrary {
             Alignment::Villain => &self.villain,
         }
     }
+}
+
+pub fn is_punctuation_storylet(storylet: &Storylet) -> bool {
+    if storylet
+        .tags
+        .iter()
+        .any(|tag| tag.eq_ignore_ascii_case("punctuation"))
+    {
+        return true;
+    }
+    matches!(
+        storylet.category,
+        StoryletCategory::CivilianLife | StoryletCategory::MaskedLife
+    )
 }
