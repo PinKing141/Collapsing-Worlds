@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "actions": [
+    {
+      "id": "TRACE_SWEEP",
+      "label": "Trace Sweep",
+      "min_heat": 25,
+      "min_case_progress": 15,
+      "signature_traces": [
+        {
+          "signature_type": "EM_SPIKE",
+          "strength": 8,
+          "persistence_turns": 4
+        }
+      ],
+      "pressure_delta": {
+        "identity": 3.0,
+        "institutional": 2.0,
+        "psychological": 1.0
+      },
+      "case_progress_delta": 4,
+      "notes": "Nemesis tests the response loop, adding forensic noise."
+    },
+    {
+      "id": "ESCALATION_SURGE",
+      "label": "Escalation Surge",
+      "min_heat": 50,
+      "min_case_progress": 45,
+      "signature_traces": [
+        {
+          "signature_type": "THERMAL_BLOOM",
+          "strength": 12,
+          "persistence_turns": 5
+        },
+        {
+          "signature_type": "KINETIC_STRESS",
+          "strength": 10,
+          "persistence_turns": 4
+        }
+      ],
+      "pressure_delta": {
+        "institutional": 4.0,
+        "moral": 2.0,
+        "resource": 2.0
+      },
+      "case_progress_delta": 6,
+      "notes": "Nemesis ramps up force, stressing response assets."
+    },
+    {
+      "id": "PSYCHIC_COUNTERMEASURE",
+      "label": "Psychic Countermeasure",
+      "min_heat": 70,
+      "min_case_progress": 80,
+      "signature_traces": [
+        {
+          "signature_type": "PSYCHIC_ECHO",
+          "strength": 14,
+          "persistence_turns": 6
+        }
+      ],
+      "pressure_delta": {
+        "identity": 5.0,
+        "psychological": 4.0
+      },
+      "case_progress_delta": 8,
+      "notes": "Nemesis adapts with counter-signatures and psy-ops."
+    }
+  ]
+}

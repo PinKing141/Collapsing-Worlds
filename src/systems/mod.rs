@@ -6,6 +6,7 @@ pub mod economy;
 pub mod event_resolver;
 pub mod faction;
 pub mod heat;
+pub mod nemesis;
 pub mod persona;
 pub mod pressure;
 pub mod suspicion;
