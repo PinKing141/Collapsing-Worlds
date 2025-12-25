@@ -3,7 +3,7 @@ use bevy_ecs::schedule::SystemSet;
 
 use crate::core::world::ActionQueue;
 use crate::core::world::IdAllocator;
-use crate::simulation::city::CityState;
+use crate::simulation::city::{CityEventLog, CityState};
 use crate::simulation::case::{CaseEventLog, CaseRegistry};
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::IdentityEvidenceStore;
@@ -11,6 +11,7 @@ use crate::simulation::civilian::CivilianState;
 use crate::simulation::storylets::StoryletLibrary;
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::pressure::PressureState;
+use crate::simulation::region::{RegionEventLog, RegionState};
 use crate::simulation::time::{advance_time_system, GameTime};
 use crate::simulation::nemesis::NemesisState;
 use crate::systems::combat::{combat_system, CombatLog};
@@ -24,6 +25,7 @@ use crate::systems::nemesis::{nemesis_system, NemesisDirector, NemesisEventLog};
 use crate::systems::movement_system;
 use crate::systems::persona::{persona_switch_system, PersonaEventLog};
 use crate::systems::pressure::pressure_system;
+use crate::systems::region::{global_faction_system, region_system, GlobalFactionDirector, GlobalFactionEventLog};
 use crate::systems::suspicion::suspicion_system;
 use crate::systems::units::unit_movement_system;
 use crate::data::storylets::{load_storylet_catalog, Storylet};
@@ -45,6 +47,7 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(CombatLog::default());
     world.insert_resource(IdAllocator::default());
     world.insert_resource(CityState::default());
+    world.insert_resource(CityEventLog::default());
     world.insert_resource(WorldEvidence::default());
     world.insert_resource(IdentityEvidenceStore::default());
     world.insert_resource(WorldEventLog::default());
@@ -54,10 +57,14 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(CaseEventLog::default());
     world.insert_resource(PersonaEventLog::default());
     world.insert_resource(PressureState::default());
+    world.insert_resource(RegionState::default());
+    world.insert_resource(RegionEventLog::default());
     world.insert_resource(CivilianState::default());
     world.insert_resource(NemesisState::default());
     world.insert_resource(NemesisEventLog::default());
     world.insert_resource(load_faction_director());
+    world.insert_resource(GlobalFactionDirector::load_default());
+    world.insert_resource(GlobalFactionEventLog::default());
     world.insert_resource(load_nemesis_director());
     world.insert_resource(load_storylets());
     world.insert_resource(StoryletState::default());
@@ -94,6 +101,12 @@ pub fn create_schedule() -> Schedule {
                 .in_set(TickSet::Simulation)
                 .after(pressure_system),
             heat_decay_system.in_set(TickSet::Time),
+            region_system
+                .in_set(TickSet::Time)
+                .after(heat_decay_system),
+            global_faction_system
+                .in_set(TickSet::Time)
+                .after(region_system),
             advance_time_system.in_set(TickSet::Time),
         ),
     );

@@ -17,7 +17,7 @@ use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
-use superhero_universe::simulation::city::CityState;
+use superhero_universe::simulation::city::{CityEventLog, CityState};
 use superhero_universe::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatState};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
@@ -25,6 +25,7 @@ use superhero_universe::simulation::growth::{
 };
 use superhero_universe::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
 use superhero_universe::simulation::pressure::PressureState;
+use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::StoryletLibrary;
 use superhero_universe::simulation::time::GameTime;
@@ -38,6 +39,10 @@ use superhero_universe::systems::faction::{run_faction_director, FactionDirector
 use superhero_universe::systems::heat::{apply_signatures, decay_heat, WorldEventLog};
 use superhero_universe::systems::persona::{attempt_switch, PersonaSwitchError};
 use superhero_universe::systems::pressure::update_pressure;
+use superhero_universe::systems::region::{
+    run_global_faction_director, run_region_update, GlobalFactionDirector,
+    GlobalFactionEventLog,
+};
 use superhero_universe::systems::suspicion::apply_suspicion_for_intents;
 use superhero_universe::systems::units::update_units;
 
@@ -90,7 +95,10 @@ fn main() {
     };
     let mut game_time = world_state.game_time;
     let mut city = world_state.city;
+    let mut city_events = CityEventLog::default();
     let mut event_log = WorldEventLog::default();
+    let mut region = RegionState::default();
+    let mut region_events = RegionEventLog::default();
     let mut persona_stack = hero_persona_stack();
     let alignment = Alignment::Hero;
     let mut storylet_state = world_state.storylet_state;
@@ -107,6 +115,8 @@ fn main() {
     };
     let mut faction_events = FactionEventLog::default();
     let mut resolved_faction_events = ResolvedFactionEventLog::default();
+    let mut global_faction_director = GlobalFactionDirector::load_default();
+    let mut global_faction_events = GlobalFactionEventLog::default();
     let mut cases = world_state.cases;
     let mut case_log = CaseEventLog::default();
     let mut combat = world_state.combat;
@@ -121,6 +131,14 @@ fn main() {
     update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
     apply_civilian_pressure(&civilian_state, &mut pressure);
     world.pressure = pressure.to_modifiers();
+    run_region_update(
+        &mut region,
+        &city,
+        &pressure,
+        &mut city_events,
+        &mut region_events,
+    );
+    run_global_faction_director(&mut global_faction_director, &region, &mut global_faction_events);
 
     let civilian_events = load_civilian_event_library();
 
@@ -272,6 +290,7 @@ fn main() {
                                             target.in_public,
                                             PersonaHint::Unknown,
                                             &mut city,
+                                            &mut city_events,
                                             &mut evidence,
                                             &mut identity_evidence,
                                             &mut faction_director,
@@ -287,6 +306,18 @@ fn main() {
                                         update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
                                         apply_civilian_pressure(&civilian_state, &mut pressure);
                                         world.pressure = pressure.to_modifiers();
+                                        run_region_update(
+                                            &mut region,
+                                            &city,
+                                            &pressure,
+                                            &mut city_events,
+                                            &mut region_events,
+                                        );
+                                        run_global_faction_director(
+                                            &mut global_faction_director,
+                                            &region,
+                                            &mut global_faction_events,
+                                        );
                                         persist_world_state(
                                             &mut *world_repo,
                                             &world,
@@ -507,6 +538,7 @@ fn main() {
                                         target.in_public,
                                         PersonaHint::Unknown,
                                         &mut city,
+                                        &mut city_events,
                                         &mut evidence,
                                         &mut identity_evidence,
                                         &mut faction_director,
@@ -525,13 +557,25 @@ fn main() {
                                 tick_cooldowns(&mut actor);
                                 update_units(&mut city);
                                 evidence.tick_decay();
-                                decay_heat(&mut city, &cases);
+                                decay_heat(&mut city, &cases, &mut city_events);
                                 game_time.advance();
                                 tick_civilian_life(&mut civilian_state, &game_time);
                                 storylet_state.tick();
                                 update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
                                 apply_civilian_pressure(&civilian_state, &mut pressure);
                                 world.pressure = pressure.to_modifiers();
+                                run_region_update(
+                                    &mut region,
+                                    &city,
+                                    &pressure,
+                                    &mut city_events,
+                                    &mut region_events,
+                                );
+                                run_global_faction_director(
+                                    &mut global_faction_director,
+                                    &region,
+                                    &mut global_faction_events,
+                                );
 
                                 if let Some(end_reason) = tick_result.ended {
                                     println!("Combat ended: {}", format_combat_end(end_reason));
@@ -582,6 +626,7 @@ fn main() {
                     &mut evidence,
                     &mut identity_evidence,
                     &mut city,
+                    &mut city_events,
                     &mut faction_director,
                     &mut faction_events,
                     &mut resolved_faction_events,
@@ -594,6 +639,10 @@ fn main() {
                     &mut civilian_state,
                     &mut storylet_state,
                     &mut pressure,
+                    &mut region,
+                    &mut region_events,
+                    &mut global_faction_director,
+                    &mut global_faction_events,
                     count,
                 );
                 persist_world_state(
@@ -1309,6 +1358,7 @@ fn apply_action_signatures(
     in_public: bool,
     persona_hint: PersonaHint,
     city: &mut CityState,
+    city_events: &mut CityEventLog,
     evidence: &mut WorldEvidence,
     identity_evidence: &mut IdentityEvidenceStore,
     faction_director: &mut FactionDirector,
@@ -1322,7 +1372,15 @@ fn apply_action_signatures(
     event_log: &mut WorldEventLog,
 ) {
     evidence.emit(location_id, signatures);
-    apply_signatures(city, location_id, signatures, witnesses, in_public, event_log);
+    apply_signatures(
+        city,
+        location_id,
+        signatures,
+        witnesses,
+        in_public,
+        event_log,
+        city_events,
+    );
     record_identity_evidence(
         identity_evidence,
         city,
@@ -1360,6 +1418,7 @@ fn tick_world(
     scene: &mut WorldEvidence,
     identity_evidence: &mut IdentityEvidenceStore,
     city: &mut CityState,
+    city_events: &mut CityEventLog,
     faction_director: &mut FactionDirector,
     faction_events: &mut FactionEventLog,
     resolved_faction_events: &mut ResolvedFactionEventLog,
@@ -1372,6 +1431,10 @@ fn tick_world(
     civilian_state: &mut CivilianState,
     storylet_state: &mut StoryletState,
     pressure: &mut PressureState,
+    region: &mut RegionState,
+    region_events: &mut RegionEventLog,
+    global_faction_director: &mut GlobalFactionDirector,
+    global_faction_events: &mut GlobalFactionEventLog,
     turns: u32,
 ) {
     for _ in 0..turns {
@@ -1389,7 +1452,7 @@ fn tick_world(
         update_cases(cases, city, scene, identity_evidence, case_log);
         update_units(city);
         scene.tick_decay();
-        decay_heat(city, cases);
+        decay_heat(city, cases, city_events);
         apply_suspicion_for_intents(
             persona_stack,
             alignment,
@@ -1406,6 +1469,8 @@ fn tick_world(
         update_pressure(pressure, city, scene, cases, game_time);
         apply_civilian_pressure(civilian_state, pressure);
         world.pressure = pressure.to_modifiers();
+        run_region_update(region, city, pressure, city_events, region_events);
+        run_global_faction_director(global_faction_director, region, global_faction_events);
     }
 }
 

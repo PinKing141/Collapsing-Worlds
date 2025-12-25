@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 use crate::components::world::{Player, Position};
 use crate::rules::signature::{SignatureInstance, SignatureType};
 use crate::simulation::case::CaseRegistry;
-use crate::simulation::city::{CityState, HeatResponse, LocationId, LocationTag};
+use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityState, HeatResponse, LocationId, LocationTag};
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
 use crate::simulation::time::GameTime;
@@ -29,6 +29,7 @@ pub fn signature_heat_system(
     mut identity: ResMut<IdentityEvidenceStore>,
     time: Res<GameTime>,
     mut log: ResMut<WorldEventLog>,
+    mut city_events: ResMut<CityEventLog>,
 ) {
     log.0.clear();
 
@@ -53,6 +54,7 @@ pub fn signature_heat_system(
             witness_count,
             in_public,
             &mut log,
+            &mut city_events,
         );
 
         if event.is_new {
@@ -75,8 +77,12 @@ pub fn signature_heat_system(
 }
 
 /// System: passive heat decay across all locations.
-pub fn heat_decay_system(mut city: ResMut<CityState>, cases: Res<CaseRegistry>) {
-    decay_heat(&mut city, &cases);
+pub fn heat_decay_system(
+    mut city: ResMut<CityState>,
+    cases: Res<CaseRegistry>,
+    mut city_events: ResMut<CityEventLog>,
+) {
+    decay_heat(&mut city, &cases, &mut city_events);
 }
 
 pub fn apply_signatures(
@@ -86,6 +92,7 @@ pub fn apply_signatures(
     witnesses: u32,
     in_public: bool,
     log: &mut WorldEventLog,
+    city_events: &mut CityEventLog,
 ) {
     let mut total_delta = 0;
     for sig in signatures {
@@ -101,11 +108,11 @@ pub fn apply_signatures(
 
     if let Some(location) = city.locations.get_mut(&location_id) {
         location.heat = (location.heat + total_delta).clamp(0, 100);
-        update_response(location, log);
+        update_response(location, log, city, city_events);
     }
 }
 
-pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry) {
+pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry, city_events: &mut CityEventLog) {
     let mut log = WorldEventLog::default();
     for location in city.locations.values_mut() {
         let mut decay: i32 = 1;
@@ -122,11 +129,16 @@ pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry) {
             decay = decay.saturating_sub(1);
         }
         location.heat = (location.heat - decay).max(0);
-        update_response(location, &mut log);
+        update_response(location, &mut log, city, city_events);
     }
 }
 
-fn update_response(location: &mut crate::simulation::city::LocationState, log: &mut WorldEventLog) {
+fn update_response(
+    location: &mut crate::simulation::city::LocationState,
+    log: &mut WorldEventLog,
+    city: &CityState,
+    city_events: &mut CityEventLog,
+) {
     let next = response_for_heat(location.heat);
     if next != location.response {
         location.response = next;
@@ -134,6 +146,13 @@ fn update_response(location: &mut crate::simulation::city::LocationState, log: &
             "Location {} response -> {:?}",
             location.id.0, location.response
         ));
+        city_events.0.push(CityEvent {
+            city_id: city.city_id,
+            location_id: location.id,
+            kind: CityEventKind::HeatResponseChanged {
+                response: location.response,
+            },
+        });
     }
 }
 

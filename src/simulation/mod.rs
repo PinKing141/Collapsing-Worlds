@@ -1,5 +1,6 @@
 pub mod time;
 pub mod city;
+pub mod region;
 pub mod evidence;
 pub mod case;
 pub mod identity_evidence;

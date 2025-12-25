@@ -4,6 +4,10 @@ use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::components::world::Position;
+use crate::simulation::region::{ContinentId, CountryId, RegionId};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CityId(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LocationId(pub u32);
@@ -24,6 +28,21 @@ pub enum HeatResponse {
     FactionAttention,
 }
 
+#[derive(Resource, Debug, Default)]
+pub struct CityEventLog(pub Vec<CityEvent>);
+
+#[derive(Debug, Clone)]
+pub struct CityEvent {
+    pub city_id: CityId,
+    pub location_id: LocationId,
+    pub kind: CityEventKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum CityEventKind {
+    HeatResponseChanged { response: HeatResponse },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocationState {
     pub id: LocationId,
@@ -42,6 +61,10 @@ pub struct LocationState {
 
 #[derive(Resource, Debug, Clone)]
 pub struct CityState {
+    pub city_id: CityId,
+    pub region_id: RegionId,
+    pub country_id: CountryId,
+    pub continent_id: ContinentId,
     pub locations: HashMap<LocationId, LocationState>,
     pub active_location: LocationId,
 }
@@ -134,6 +157,10 @@ impl Default for CityState {
         );
 
         CityState {
+            city_id: CityId(1),
+            region_id: RegionId(1),
+            country_id: CountryId(1),
+            continent_id: ContinentId(1),
             locations,
             active_location: LocationId(1),
         }
