@@ -1508,7 +1508,14 @@ fn print_scene(scene: &WorldEvidence) {
 fn print_civilian_status(state: &CivilianState, time: &GameTime) {
     let pressure = state.pressure_targets();
     println!("Civilian status @ {}:", time.to_string());
-    println!("  Job: {:?}", state.job_status);
+    println!(
+        "  Job: {:?} ({:?} L{} | satisfaction={} stability={})",
+        state.job_status,
+        state.job.role,
+        state.job.level,
+        state.job.satisfaction,
+        state.job.stability
+    );
     println!(
         "  Finances: cash={} debt={} rent={} rent_due_in={} wage={}",
         state.finances.cash,
@@ -1522,8 +1529,27 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         state.social.support, state.social.strain, state.social.obligation
     );
     println!(
-        "  Civilian pressure targets: temporal={:.1} resource={:.1} moral={:.1}",
-        pressure.temporal, pressure.resource, pressure.moral
+        "  Reputation: career={} community={} media={}",
+        state.reputation.career, state.reputation.community, state.reputation.media
+    );
+    println!(
+        "  Rewards: income_boost={} safehouse={} access={}",
+        state.rewards.income_boost, state.rewards.safehouse, state.rewards.access
+    );
+    if state.contacts.is_empty() {
+        println!("  Contacts: none");
+    } else {
+        println!("  Contacts:");
+        for contact in &state.contacts {
+            println!(
+                "    {} -> {:?} (bond={} influence={})",
+                contact.name, contact.level, contact.bond, contact.influence
+            );
+        }
+    }
+    println!(
+        "  Civilian pressure targets: temporal={:.1} resource={:.1} moral={:.1} identity={:.1}",
+        pressure.temporal, pressure.resource, pressure.moral, pressure.identity
     );
 }
 

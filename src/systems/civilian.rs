@@ -18,4 +18,5 @@ pub fn apply_civilian_pressure(civilian: &CivilianState, pressure: &mut Pressure
     pressure.temporal = (pressure.temporal + targets.temporal * 0.35).clamp(0.0, 100.0);
     pressure.resource = (pressure.resource + targets.resource * 0.4).clamp(0.0, 100.0);
     pressure.moral = (pressure.moral + targets.moral * 0.3).clamp(0.0, 100.0);
+    pressure.identity = (pressure.identity + targets.identity * 0.35).clamp(0.0, 100.0);
 }
