@@ -13,5 +13,6 @@ pub use mastery::{stage_from_uses, MasteryStage};
 pub use power::{ExpressionId, PersonaExpression, PowerId, PowerInfo, PowerRepository, PowerStats};
 pub use signature::{SignatureInstance, SignatureSpec, SignatureType};
 pub use use_power::{
-    can_use, use_power, ActorState, TargetContext, UseContext, UseError, UseResult, WorldState,
+    can_use, use_power, ActorState, PressureModifiers, TargetContext, UseContext, UseError,
+    UseResult, WorldState,
 };

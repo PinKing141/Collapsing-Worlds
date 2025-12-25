@@ -17,6 +17,22 @@ pub struct ActorState {
 #[derive(Debug, Default)]
 pub struct WorldState {
     pub turn: u64,
+    pub pressure: PressureModifiers,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PressureModifiers {
+    pub cost_scale: f64,
+    pub risk_scale: f64,
+}
+
+impl Default for PressureModifiers {
+    fn default() -> Self {
+        Self {
+            cost_scale: 1.0,
+            risk_scale: 1.0,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -56,7 +72,7 @@ pub struct UseResult {
 
 pub fn can_use(ctx: &UseContext, expr: &ExpressionDef, target: &TargetContext) -> Result<(), UseError> {
     let mastery_stage = ctx.mastery.unwrap_or(MasteryStage::Raw);
-    let costs = apply_mastery_costs(&expr.costs, mastery_stage);
+    let costs = apply_mastery_costs(&expr.costs, mastery_stage, ctx.world.pressure);
     if let Some(unlocked) = ctx.unlocked {
         if !unlocked.contains(&expr.id) {
             return Err(UseError::Locked);
@@ -108,7 +124,7 @@ pub fn use_power(
 ) -> Result<UseResult, UseError> {
     can_use(ctx, expr, target)?;
     let mastery_stage = ctx.mastery.unwrap_or(MasteryStage::Raw);
-    let costs = apply_mastery_costs(&expr.costs, mastery_stage);
+    let costs = apply_mastery_costs(&expr.costs, mastery_stage, ctx.world.pressure);
 
     let stamina_cost = sum_costs(&costs, CostType::Stamina);
     let focus_cost = sum_costs(&costs, CostType::Focus);
@@ -159,13 +175,23 @@ fn max_cost(costs: &[CostSpec], cost_type: CostType) -> Option<i64> {
         .max()
 }
 
-fn apply_mastery_costs(costs: &[CostSpec], stage: MasteryStage) -> Vec<CostSpec> {
+fn apply_mastery_costs(
+    costs: &[CostSpec],
+    stage: MasteryStage,
+    pressure: PressureModifiers,
+) -> Vec<CostSpec> {
     let (cost_num, cost_den, risk_num, risk_den) = mastery_cost_factors(stage);
     costs
         .iter()
         .map(|cost| {
-            let value = cost.value.map(|v| scale_cost(v, cost_num, cost_den));
-            let risk_chance = cost.risk_chance.map(|v| scale_risk(v, risk_num, risk_den));
+            let value = cost
+                .value
+                .map(|v| scale_cost(v, cost_num, cost_den))
+                .map(|v| scale_cost_float(v, pressure.cost_scale));
+            let risk_chance = cost
+                .risk_chance
+                .map(|v| scale_risk(v, risk_num, risk_den))
+                .map(|v| (v * pressure.risk_scale).clamp(0.0, 1.0));
             CostSpec {
                 cost_type: cost.cost_type,
                 value,
@@ -222,4 +248,12 @@ fn scale_cost(value: i64, num: i64, den: i64) -> i64 {
 fn scale_risk(value: f64, num: i64, den: i64) -> f64 {
     let scale = num as f64 / den as f64;
     value * scale
+}
+
+fn scale_cost_float(value: i64, scale: f64) -> i64 {
+    if value <= 0 {
+        return value;
+    }
+    let scaled = (value as f64 * scale).ceil() as i64;
+    scaled.max(1)
 }
