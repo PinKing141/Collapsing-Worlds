@@ -10,3 +10,4 @@ pub mod combat;
 pub mod growth;
 pub mod pressure;
 pub mod origin;
+pub mod civilian;

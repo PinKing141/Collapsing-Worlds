@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "civilian_work_shift",
+      "title": "The Morning Shift",
+      "text_stub": "Your shift starts in an hour. The commute will cost time, but the pay keeps the bills in check.",
+      "choices": [
+        {
+          "id": "work",
+          "text": "Go in and power through the shift.",
+          "effects": ["cash:+45", "support:-2", "strain:+3"]
+        },
+        {
+          "id": "skip",
+          "text": "Skip work to handle other responsibilities.",
+          "effects": ["cash:-15", "strain:+4", "job:part_time"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_rent_due",
+      "title": "Rent Is Due",
+      "text_stub": "Your landlord is expecting payment. The deadline is today, and the ledger doesn't lie.",
+      "choices": [
+        {
+          "id": "pay",
+          "text": "Pay the rent and reset the clock.",
+          "effects": ["cash:-80", "rent_due_in:+30", "strain:-2"]
+        },
+        {
+          "id": "delay",
+          "text": "Delay the payment and take on a penalty.",
+          "effects": ["debt:+40", "rent_due_in:+5", "strain:+3", "support:-3"]
+        }
+      ]
+    },
+    {
+      "id": "civilian_relationship_checkin",
+      "title": "Relationship Check-In",
+      "text_stub": "Someone close needs time and reassurance. Letting it slide could create distance.",
+      "choices": [
+        {
+          "id": "show_up",
+          "text": "Be there and reconnect.",
+          "effects": ["support:+6", "strain:-3", "cash:-10"]
+        },
+        {
+          "id": "miss",
+          "text": "Miss the meeting and promise to make it up later.",
+          "effects": ["support:-5", "strain:+6", "obligation:+4"]
+        }
+      ]
+    }
+  ]
+}

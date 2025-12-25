@@ -1,6 +1,7 @@
 pub mod combat;
 pub mod combat_loop;
 pub mod case;
+pub mod civilian;
 pub mod economy;
 pub mod event_resolver;
 pub mod faction;
