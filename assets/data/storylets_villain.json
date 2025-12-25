@@ -4,7 +4,12 @@
     {
       "id": "vil_power_grab",
       "category": "VILLAIN_OPPORTUNITIES",
-      "preconditions": ["alignment == VILLAIN", "heat >= 15", "persona == MASKED"],
+      "preconditions": [
+        "alignment == VILLAIN",
+        "heat >= 15",
+        "persona == MASKED",
+        "pressure.identity >= 20"
+      ],
       "text_stub": "A power vacuum opens after a crackdown.",
       "choices": [
         {
@@ -42,7 +47,11 @@
     {
       "id": "vil_media_fear",
       "category": "INSTITUTIONAL_PRESSURE",
-      "preconditions": ["alignment == VILLAIN", "public.suspicion >= 20"],
+      "preconditions": [
+        "alignment == VILLAIN",
+        "public.suspicion >= 20",
+        "pressure.moral <= 40"
+      ],
       "text_stub": "Media coverage paints you as a looming threat.",
       "choices": [
         {
@@ -80,7 +89,11 @@
     {
       "id": "vil_institution_pressure",
       "category": "INSTITUTIONAL_PRESSURE",
-      "preconditions": ["alignment == VILLAIN", "wanted.level >= 15"],
+      "preconditions": [
+        "alignment == VILLAIN",
+        "wanted.level >= 15",
+        "pressure.institutional >= 25"
+      ],
       "text_stub": "Authorities add you to a high-priority list.",
       "choices": [
         {

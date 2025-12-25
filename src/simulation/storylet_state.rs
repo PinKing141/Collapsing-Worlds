@@ -50,6 +50,8 @@ pub struct StoryletState {
     pub flags: HashMap<String, bool>,
     #[serde(default)]
     pub punctuation: StoryletPunctuationState,
+    #[serde(default)]
+    pub punctuation_cooldown: i32,
 }
 
 impl StoryletState {
@@ -67,5 +69,8 @@ impl StoryletState {
             self.cooldowns.remove(&id);
         }
         self.punctuation.tick();
+        if self.punctuation_cooldown > 0 {
+            self.punctuation_cooldown -= 1;
+        }
     }
 }

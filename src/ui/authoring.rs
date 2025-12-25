@@ -4,7 +4,10 @@ use crate::data::civilian_events::CivilianStorylet;
 use crate::data::nemesis::NemesisActionCatalog;
 use crate::data::storylets::StoryletCategory;
 use crate::simulation::origin::{OriginCatalog, OriginPathCatalog};
-use crate::simulation::storylets::{is_punctuation_storylet, StoryletLibrary};
+use crate::simulation::storylets::{
+    is_punctuation_storylet, storylet_has_gate_requirements, storylet_threshold_keys,
+    StoryletLibrary,
+};
 
 pub fn render_authoring_dashboard(
     storylets: &StoryletLibrary,
@@ -23,6 +26,11 @@ pub fn render_authoring_dashboard(
 
     let mut category_counts: HashMap<StoryletCategory, usize> = HashMap::new();
     let mut punctuation_count = 0usize;
+    let mut tag_counts: HashMap<String, usize> = HashMap::new();
+    let mut missing_tags = 0usize;
+    let mut threshold_counts: HashMap<String, usize> = HashMap::new();
+    let mut threshold_storylets = 0usize;
+    let mut ungated_storylets = 0usize;
     for storylet in storylets
         .hero
         .iter()
@@ -32,6 +40,24 @@ pub fn render_authoring_dashboard(
         *category_counts.entry(storylet.category).or_insert(0) += 1;
         if is_punctuation_storylet(storylet) {
             punctuation_count += 1;
+        }
+        if storylet.tags.is_empty() {
+            missing_tags += 1;
+        } else {
+            for tag in &storylet.tags {
+                *tag_counts.entry(tag.clone()).or_insert(0) += 1;
+            }
+        }
+        let thresholds = storylet_threshold_keys(storylet);
+        if thresholds.is_empty() {
+            if !storylet_has_gate_requirements(storylet) {
+                ungated_storylets += 1;
+            }
+        } else {
+            threshold_storylets += 1;
+            for key in thresholds {
+                *threshold_counts.entry(key).or_insert(0) += 1;
+            }
         }
     }
 
@@ -48,6 +74,33 @@ pub fn render_authoring_dashboard(
     categories.sort_by_key(|(category, _)| format!("{:?}", category));
     for (category, count) in categories {
         output.push_str(&format!("    {:?}: {}\n", category, count));
+    }
+    output.push_str(&format!("  Untagged: {}\n", missing_tags));
+    if !tag_counts.is_empty() {
+        output.push_str("  Tags:\n");
+        let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
+        tags.sort_by(|a, b| a.0.cmp(&b.0));
+        for (tag, count) in tags {
+            output.push_str(&format!("    {}: {}\n", tag, count));
+        }
+    }
+    if !threshold_counts.is_empty() {
+        output.push_str(&format!(
+            "  Threshold-gated storylets: {}\n",
+            threshold_storylets
+        ));
+        output.push_str("  Threshold keys:\n");
+        let mut keys: Vec<(String, usize)> = threshold_counts.into_iter().collect();
+        keys.sort_by(|a, b| a.0.cmp(&b.0));
+        for (key, count) in keys {
+            output.push_str(&format!("    {}: {}\n", key, count));
+        }
+    }
+    if ungated_storylets > 0 {
+        output.push_str(&format!(
+            "  Ungated storylets (missing tags/thresholds): {}\n",
+            ungated_storylets
+        ));
     }
 
     output.push_str("\nCivilian Events\n");
