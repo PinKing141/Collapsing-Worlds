@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "roles": [
+    {
+      "id": "courier",
+      "label": "Back-alley courier",
+      "incident_chance": 0.15,
+      "incident_cooldown": 4,
+      "incident_signatures": [
+        { "signature_type": "KINETIC_STRESS", "strength": 8, "persistence_turns": 3 }
+      ]
+    },
+    {
+      "id": "fixer",
+      "label": "Neighborhood fixer",
+      "incident_chance": 0.1,
+      "incident_cooldown": 6,
+      "incident_signatures": [
+        { "signature_type": "CHEMICAL_RESIDUE", "strength": 6, "persistence_turns": 4 },
+        { "signature_type": "VISUAL_ANOMALY", "strength": 4, "persistence_turns": 2 }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "agent_courier_north",
+      "name": "Courier Sable",
+      "role_id": "courier",
+      "home_location": 2,
+      "haunt_location": 1,
+      "move_interval": 3
+    },
+    {
+      "id": "agent_fixer_south",
+      "name": "Fixer Miko",
+      "role_id": "fixer",
+      "home_location": 3,
+      "haunt_location": 4,
+      "move_interval": 5
+    }
+  ]
+}

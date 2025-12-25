@@ -16,7 +16,8 @@ use superhero_universe::rules::{
     WorldState,
 };
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
-use superhero_universe::simulation::city::{CityEventLog, CityState};
+use superhero_universe::simulation::agents::{AgentEvent, AgentEventLog, AgentRegistry, tick_agents};
+use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
@@ -133,6 +134,14 @@ fn main() {
     let mut global_faction_events = GlobalFactionEventLog::default();
     let mut cases = world_state.cases;
     let mut case_log = CaseEventLog::default();
+    let mut agents = match AgentRegistry::load_default() {
+        Ok(registry) => registry,
+        Err(err) => {
+            eprintln!("Failed to load agent data: {}", err);
+            AgentRegistry::default()
+        }
+    };
+    let mut agent_events = AgentEventLog::default();
     let mut combat = world_state.combat;
     let mut transformation_state: Option<TransformationState> = None;
     let mut target = TargetContext {
@@ -805,6 +814,8 @@ fn main() {
                     &mut resolved_faction_events,
                     &mut cases,
                     &mut case_log,
+                    &mut agents,
+                    &mut agent_events,
                     &mut persona_stack,
                     alignment,
                     &mut player_pos,
@@ -1544,6 +1555,85 @@ fn record_identity_evidence(
     }
 }
 
+fn apply_agent_events(
+    agent_events: &AgentEventLog,
+    turn: u64,
+    city: &mut CityState,
+    city_events: &mut CityEventLog,
+    evidence: &mut WorldEvidence,
+    identity_evidence: &mut IdentityEvidenceStore,
+    event_log: &mut WorldEventLog,
+) {
+    for event in &agent_events.0 {
+        if let AgentEvent::Incident {
+            location_id,
+            signatures,
+            ..
+        } = event
+        {
+            apply_agent_incident(
+                signatures,
+                *location_id,
+                turn,
+                city,
+                city_events,
+                evidence,
+                identity_evidence,
+                event_log,
+            );
+        }
+    }
+}
+
+fn apply_agent_incident(
+    signatures: &[superhero_universe::rules::SignatureInstance],
+    location_id: superhero_universe::simulation::city::LocationId,
+    turn: u64,
+    city: &mut CityState,
+    city_events: &mut CityEventLog,
+    evidence: &mut WorldEvidence,
+    identity_evidence: &mut IdentityEvidenceStore,
+    event_log: &mut WorldEventLog,
+) {
+    if signatures.is_empty() {
+        return;
+    }
+
+    let (in_public, witnesses) = city
+        .locations
+        .get(&location_id)
+        .map(|location| {
+            let in_public = location.tags.contains(&LocationTag::Public);
+            let witnesses = if in_public {
+                2 + (location.surveillance_level / 20).max(0) as u32
+            } else {
+                0
+            };
+            (in_public, witnesses)
+        })
+        .unwrap_or((true, 0));
+
+    evidence.emit(location_id, signatures);
+    apply_signatures(
+        city,
+        location_id,
+        signatures,
+        witnesses,
+        in_public,
+        event_log,
+        city_events,
+    );
+    record_identity_evidence(
+        identity_evidence,
+        city,
+        location_id,
+        turn,
+        signatures,
+        witnesses,
+        PersonaHint::Unknown,
+    );
+}
+
 fn apply_action_signatures(
     signatures: &[superhero_universe::rules::SignatureInstance],
     location_id: superhero_universe::simulation::city::LocationId,
@@ -1706,6 +1796,8 @@ fn tick_world(
     resolved_faction_events: &mut ResolvedFactionEventLog,
     cases: &mut CaseRegistry,
     case_log: &mut CaseEventLog,
+    agents: &mut AgentRegistry,
+    agent_events: &mut AgentEventLog,
     persona_stack: &mut PersonaStack,
     alignment: Alignment,
     position: &mut Position,
@@ -1719,9 +1811,27 @@ fn tick_world(
     global_faction_events: &mut GlobalFactionEventLog,
     turns: u32,
 ) {
+    let mut agent_event_log = WorldEventLog::default();
     for _ in 0..turns {
         world.turn += 1;
         tick_cooldowns(actor);
+        update_units(city);
+        scene.tick_decay();
+        decay_heat(city, cases, city_events);
+        game_time.advance();
+        tick_agents(agents, city, game_time, agent_events);
+        agent_event_log.0.clear();
+        apply_agent_events(
+            agent_events,
+            world.turn,
+            city,
+            city_events,
+            scene,
+            identity_evidence,
+            &mut agent_event_log,
+        );
+        tick_civilian_life(civilian_state, game_time);
+        storylet_state.tick();
         run_faction_director(faction_director, city, scene, faction_events);
         resolve_faction_events(
             faction_events,
@@ -1732,9 +1842,6 @@ fn tick_world(
             case_log,
         );
         update_cases(cases, city, scene, identity_evidence, case_log);
-        update_units(city);
-        scene.tick_decay();
-        decay_heat(city, cases, city_events);
         apply_suspicion_for_intents(
             persona_stack,
             alignment,
@@ -1745,9 +1852,6 @@ fn tick_world(
             &[],
             1,
         );
-        game_time.advance();
-        tick_civilian_life(civilian_state, game_time);
-        storylet_state.tick();
         update_pressure(pressure, city, scene, cases, game_time);
         apply_civilian_pressure(civilian_state, pressure);
         world.pressure = pressure.to_modifiers();
