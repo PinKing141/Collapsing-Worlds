@@ -29,6 +29,7 @@ use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::StoryletLibrary;
 use superhero_universe::simulation::time::GameTime;
+use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
@@ -120,6 +121,7 @@ fn main() {
     let mut cases = world_state.cases;
     let mut case_log = CaseEventLog::default();
     let mut combat = world_state.combat;
+    let mut transformation_state: Option<TransformationState> = None;
     let mut target = TargetContext {
         distance_m: Some(10),
         has_line_of_sight: true,
@@ -317,6 +319,13 @@ fn main() {
                                             &mut global_faction_director,
                                             &region,
                                             &mut global_faction_events,
+                                        );
+                                        handle_transformation(
+                                            &cases,
+                                            &pressure,
+                                            &resolved_faction_events,
+                                            &mut storylet_state,
+                                            &mut transformation_state,
                                         );
                                         persist_world_state(
                                             &mut *world_repo,
@@ -576,6 +585,13 @@ fn main() {
                                     &region,
                                     &mut global_faction_events,
                                 );
+                                handle_transformation(
+                                    &cases,
+                                    &pressure,
+                                    &resolved_faction_events,
+                                    &mut storylet_state,
+                                    &mut transformation_state,
+                                );
 
                                 if let Some(end_reason) = tick_result.ended {
                                     println!("Combat ended: {}", format_combat_end(end_reason));
@@ -644,6 +660,13 @@ fn main() {
                     &mut global_faction_director,
                     &mut global_faction_events,
                     count,
+                );
+                handle_transformation(
+                    &cases,
+                    &pressure,
+                    &resolved_faction_events,
+                    &mut storylet_state,
+                    &mut transformation_state,
                 );
                 persist_world_state(
                     &mut *world_repo,
@@ -1471,6 +1494,58 @@ fn tick_world(
         world.pressure = pressure.to_modifiers();
         run_region_update(region, city, pressure, city_events, region_events);
         run_global_faction_director(global_faction_director, region, global_faction_events);
+    }
+}
+
+fn handle_transformation(
+    cases: &CaseRegistry,
+    pressure: &PressureState,
+    faction_events: &ResolvedFactionEventLog,
+    storylet_state: &mut StoryletState,
+    last_state: &mut Option<TransformationState>,
+) {
+    if let Some(event) = evaluate_transformation(cases, pressure, faction_events) {
+        let flag = transformation_flag(event.state);
+        if storylet_state.flags.get(flag).copied().unwrap_or(false) {
+            return;
+        }
+        storylet_state.flags.insert(flag.to_string(), true);
+        *last_state = Some(event.state);
+        println!(
+            "Transformation triggered ({:?}): {}",
+            event.trigger,
+            transformation_text(event.state)
+        );
+    }
+}
+
+fn transformation_flag(state: TransformationState) -> &'static str {
+    match state {
+        TransformationState::Exposed => "transformation_exposed",
+        TransformationState::Registration => "transformation_registration",
+        TransformationState::CosmicJudgement => "transformation_cosmic_judgement",
+        TransformationState::Ascension => "transformation_ascension",
+        TransformationState::Exile => "transformation_exile",
+    }
+}
+
+fn transformation_text(state: TransformationState) -> &'static str {
+    match state {
+        TransformationState::Exposed => {
+            "Your cover breaks. The city has a name and a face for you."
+        }
+        TransformationState::Registration => {
+            "The registries open. Compliance or resistance becomes the story."
+        }
+        TransformationState::CosmicJudgement => {
+            "The signal rises beyond the city. Something vast takes notice."
+        }
+        TransformationState::Ascension => {
+            "Your power crests. The world bends to the new gravity you carry."
+        }
+        TransformationState::Exile => {
+            "Faction attention becomes a net. Retreat to survive."
+        }
     }
 }
 
