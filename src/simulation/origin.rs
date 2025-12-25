@@ -13,11 +13,17 @@ use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::pressure::PressureState;
 
 const DEFAULT_ORIGINS_PATH: &str = "./assets/data/origins.json";
+const DEFAULT_ORIGIN_PATHS_PATH: &str = "./assets/data/origin_paths.json";
 const DEFAULT_CONTENT_DB_PATH: &str = "./assets/db/content_v1.db";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OriginCatalog {
     pub origins: Vec<OriginDefinition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OriginPathCatalog {
+    pub paths: Vec<OriginPathDefinition>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +36,61 @@ pub struct OriginDefinition {
     #[serde(default)]
     pub acquisition_hooks: Vec<OriginHook>,
     pub effects: OriginEffects,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OriginPathDefinition {
+    pub id: String,
+    pub label: String,
+    pub summary: String,
+    #[serde(default)]
+    pub availability: OriginPathAvailability,
+    pub stages: Vec<OriginPathStage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OriginPathAvailability {
+    #[serde(default = "default_origin_path_weight")]
+    pub weight: u32,
+    #[serde(default)]
+    pub required_origin_ids: Vec<String>,
+    #[serde(default)]
+    pub required_origin_classes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OriginPathStage {
+    pub id: String,
+    pub label: String,
+    pub summary: String,
+    #[serde(default)]
+    pub requirement: OriginStageRequirement,
+    #[serde(default)]
+    pub reward: OriginStageReward,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OriginStageRequirement {
+    #[serde(default)]
+    pub progress_needed: u32,
+    #[serde(default)]
+    pub progress_per_tick: u32,
+    #[serde(default)]
+    pub event_tags: Vec<String>,
+    #[serde(default)]
+    pub event_progress: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OriginStageReward {
+    #[serde(default)]
+    pub reputation_delta: i32,
+    #[serde(default)]
+    pub pressure_delta: PressureDelta,
+    #[serde(default)]
+    pub mutation_tags: Vec<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,11 +152,21 @@ pub struct OriginState {
     pub mutations: Vec<String>,
 }
 
+#[derive(Resource, Debug, Clone, Default)]
+pub struct OriginQuestState {
+    pub path_id: Option<String>,
+    pub stage_index: usize,
+    pub stage_progress: u32,
+    pub completed: bool,
+    pub completed_stages: Vec<String>,
+}
+
 #[derive(Debug)]
 pub enum OriginError {
     Io(std::io::Error),
     Parse(serde_json::Error),
     Db(rusqlite::Error),
+    NotFound(String),
 }
 
 impl std::fmt::Display for OriginError {
@@ -104,6 +175,7 @@ impl std::fmt::Display for OriginError {
             OriginError::Io(err) => write!(f, "I/O error: {}", err),
             OriginError::Parse(err) => write!(f, "Parse error: {}", err),
             OriginError::Db(err) => write!(f, "Database error: {}", err),
+            OriginError::NotFound(message) => write!(f, "Not found: {}", message),
         }
     }
 }
@@ -240,6 +312,84 @@ pub fn load_origin_catalog(path: &str) -> Result<OriginCatalog, OriginError> {
     serde_json::from_str(&data).map_err(OriginError::Parse)
 }
 
+pub fn load_origin_path_catalog(path: &str) -> Result<OriginPathCatalog, OriginError> {
+    let data = fs::read_to_string(path).map_err(OriginError::Io)?;
+    serde_json::from_str(&data).map_err(OriginError::Parse)
+}
+
+pub fn load_default_origin_path_catalog() -> Result<OriginPathCatalog, OriginError> {
+    load_origin_path_catalog(DEFAULT_ORIGIN_PATHS_PATH)
+}
+
+pub fn select_origin_paths(
+    catalog: &OriginPathCatalog,
+    origin_state: Option<&OriginState>,
+    seed: u64,
+    count: usize,
+) -> Vec<OriginPathDefinition> {
+    let mut candidates: Vec<OriginPathDefinition> = catalog
+        .paths
+        .iter()
+        .filter(|path| is_path_available(path, origin_state))
+        .cloned()
+        .collect();
+    if candidates.is_empty() || count == 0 {
+        return Vec::new();
+    }
+    let mut rng = seed ^ hash_seed("origin_paths");
+    let mut chosen = Vec::new();
+    let mut remaining = count.min(candidates.len());
+    while remaining > 0 && !candidates.is_empty() {
+        let idx = weighted_origin_path_index(&candidates, &mut rng);
+        chosen.push(candidates.swap_remove(idx));
+        remaining = remaining.saturating_sub(1);
+    }
+    chosen
+}
+
+pub fn start_origin_path(
+    state: &mut OriginQuestState,
+    catalog: &OriginPathCatalog,
+    path_id: &str,
+) -> Result<OriginPathDefinition, OriginError> {
+    let Some(path) = catalog.paths.iter().find(|path| path.id == path_id) else {
+        return Err(OriginError::NotFound(format!(
+            "origin path {}",
+            path_id
+        )));
+    };
+    state.path_id = Some(path.id.clone());
+    state.stage_index = 0;
+    state.stage_progress = 0;
+    state.completed = false;
+    state.completed_stages.clear();
+    Ok(path.clone())
+}
+
+pub fn current_origin_stage<'a>(
+    state: &OriginQuestState,
+    catalog: &'a OriginPathCatalog,
+) -> Option<&'a OriginPathStage> {
+    let path_id = state.path_id.as_deref()?;
+    let path = catalog.paths.iter().find(|path| path.id == path_id)?;
+    path.stages.get(state.stage_index)
+}
+
+pub fn tick_origin_path(
+    state: &mut OriginQuestState,
+    catalog: &OriginPathCatalog,
+) -> Vec<OriginStageReward> {
+    advance_origin_path(state, catalog, OriginAdvance::Tick)
+}
+
+pub fn register_origin_event(
+    state: &mut OriginQuestState,
+    catalog: &OriginPathCatalog,
+    event_tag: &str,
+) -> Vec<OriginStageReward> {
+    advance_origin_path(state, catalog, OriginAdvance::Event(event_tag))
+}
+
 fn select_origin(catalog: &OriginCatalog, seed: u64) -> Option<OriginDefinition> {
     if catalog.origins.is_empty() {
         return None;
@@ -316,6 +466,25 @@ fn weighted_choice_index(profiles: &[AcquisitionProfile], rng: &mut u64) -> usiz
     profiles.len().saturating_sub(1)
 }
 
+fn weighted_origin_path_index(paths: &[OriginPathDefinition], rng: &mut u64) -> usize {
+    let total_weight: u64 = paths
+        .iter()
+        .map(|path| path.availability.weight.max(1) as u64)
+        .sum();
+    if total_weight == 0 {
+        return ((*rng as usize) % paths.len()).min(paths.len() - 1);
+    }
+    let roll = next_u64(rng) % total_weight;
+    let mut acc = 0u64;
+    for (idx, path) in paths.iter().enumerate() {
+        acc += path.availability.weight.max(1) as u64;
+        if roll < acc {
+            return idx;
+        }
+    }
+    paths.len().saturating_sub(1)
+}
+
 fn next_u64(state: &mut u64) -> u64 {
     *state = state
         .wrapping_mul(6364136223846793005)
@@ -330,6 +499,101 @@ fn hash_seed(value: &str) -> u64 {
         hash = hash.wrapping_mul(1099511628211);
     }
     hash
+}
+
+fn is_path_available(path: &OriginPathDefinition, origin_state: Option<&OriginState>) -> bool {
+    let availability = &path.availability;
+    if availability.required_origin_ids.is_empty() && availability.required_origin_classes.is_empty()
+    {
+        return true;
+    }
+    let Some(origin_state) = origin_state else {
+        return true;
+    };
+    let origin_id = origin_state.origin_id.as_deref();
+    let origin_class = origin_state.origin_class.as_deref();
+    if !availability.required_origin_ids.is_empty()
+        && origin_id
+            .map(|id| availability.required_origin_ids.iter().any(|req| req == id))
+            .unwrap_or(false)
+    {
+        return true;
+    }
+    if !availability.required_origin_classes.is_empty()
+        && origin_class
+            .map(|class| availability.required_origin_classes.iter().any(|req| req == class))
+            .unwrap_or(false)
+    {
+        return true;
+    }
+    availability.required_origin_ids.is_empty() && availability.required_origin_classes.is_empty()
+}
+
+fn default_origin_path_weight() -> u32 {
+    1
+}
+
+enum OriginAdvance<'a> {
+    Tick,
+    Event(&'a str),
+}
+
+fn advance_origin_path(
+    state: &mut OriginQuestState,
+    catalog: &OriginPathCatalog,
+    advance: OriginAdvance<'_>,
+) -> Vec<OriginStageReward> {
+    let mut rewards = Vec::new();
+    if state.completed {
+        return rewards;
+    }
+    let path_id = match state.path_id.as_deref() {
+        Some(id) => id,
+        None => return rewards,
+    };
+    let Some(path) = catalog.paths.iter().find(|path| path.id == path_id) else {
+        return rewards;
+    };
+    if state.stage_index >= path.stages.len() {
+        state.completed = true;
+        return rewards;
+    }
+    let stage = &path.stages[state.stage_index];
+    let progress_delta = match advance {
+        OriginAdvance::Tick => stage.requirement.progress_per_tick,
+        OriginAdvance::Event(tag) => {
+            if stage
+                .requirement
+                .event_tags
+                .iter()
+                .any(|entry| entry.eq_ignore_ascii_case(tag))
+            {
+                stage.requirement.event_progress.max(1)
+            } else {
+                0
+            }
+        }
+    };
+    if progress_delta == 0 {
+        return rewards;
+    }
+    state.stage_progress = state.stage_progress.saturating_add(progress_delta);
+    loop {
+        if state.stage_index >= path.stages.len() {
+            state.completed = true;
+            break;
+        }
+        let stage = &path.stages[state.stage_index];
+        let needed = stage.requirement.progress_needed.max(1);
+        if state.stage_progress < needed {
+            break;
+        }
+        state.completed_stages.push(stage.id.clone());
+        rewards.push(stage.reward.clone());
+        state.stage_index = state.stage_index.saturating_add(1);
+        state.stage_progress = 0;
+    }
+    rewards
 }
 
 #[cfg(test)]

@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use crate::data::civilian_events::CivilianStorylet;
 use crate::data::nemesis::NemesisActionCatalog;
 use crate::data::storylets::StoryletCategory;
-use crate::simulation::origin::OriginCatalog;
+use crate::simulation::origin::{OriginCatalog, OriginPathCatalog};
 use crate::simulation::storylets::{is_punctuation_storylet, StoryletLibrary};
 
 pub fn render_authoring_dashboard(
     storylets: &StoryletLibrary,
     civilian_events: &[CivilianStorylet],
     origins: &OriginCatalog,
+    origin_paths: &OriginPathCatalog,
     nemesis_actions: &NemesisActionCatalog,
 ) -> String {
     let mut output = String::new();
@@ -80,6 +81,16 @@ pub fn render_authoring_dashboard(
         for (heat, count) in gates {
             output.push_str(&format!("    {}+: {}\n", heat, count));
         }
+    }
+
+    output.push_str("\nOrigin Paths\n");
+    output.push_str(&format!("  Total: {}\n", origin_paths.paths.len()));
+    if !origin_paths.paths.is_empty() {
+        let mut stage_totals = 0usize;
+        for path in &origin_paths.paths {
+            stage_totals += path.stages.len();
+        }
+        output.push_str(&format!("  Stages: {}\n", stage_totals));
     }
 
     output
