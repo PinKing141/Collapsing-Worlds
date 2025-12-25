@@ -9,7 +9,8 @@ use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, Sqlite
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 use superhero_universe::rules::{
-    can_use, use_power, ActorState, CostType, TargetContext, UseContext, WorldState,
+    can_use, use_power, ActorState, CostType, PressureModifiers, TargetContext, UseContext,
+    WorldState,
 };
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::city::CityState;
@@ -19,6 +20,7 @@ use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
 };
 use superhero_universe::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
+use superhero_universe::simulation::pressure::PressureState;
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::StoryletLibrary;
 use superhero_universe::simulation::time::GameTime;
@@ -30,6 +32,7 @@ use superhero_universe::systems::event_resolver::{resolve_faction_events, Resolv
 use superhero_universe::systems::faction::{run_faction_director, FactionDirector, FactionEventLog};
 use superhero_universe::systems::heat::{apply_signatures, decay_heat, WorldEventLog};
 use superhero_universe::systems::persona::{attempt_switch, PersonaSwitchError};
+use superhero_universe::systems::pressure::update_pressure;
 use superhero_universe::systems::suspicion::apply_suspicion_for_intents;
 use superhero_universe::systems::units::update_units;
 
@@ -78,6 +81,7 @@ fn main() {
     let mut identity_evidence = IdentityEvidenceStore::default();
     let mut world = WorldState {
         turn: world_state.world_turn,
+        pressure: PressureModifiers::default(),
     };
     let mut game_time = world_state.game_time;
     let mut city = world_state.city;
@@ -88,6 +92,7 @@ fn main() {
     let mut growth = world_state.growth;
     let storylets = load_storylet_library();
     let mut player_pos = Position { x: 0, y: 0 };
+    let mut pressure = PressureState::default();
     let mut faction_director = match FactionDirector::load_default() {
         Ok(director) => director,
         Err(err) => {
@@ -107,6 +112,8 @@ fn main() {
         in_public: true,
         witnesses: 0,
     };
+    update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+    world.pressure = pressure.to_modifiers();
 
     println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
@@ -146,7 +153,7 @@ fn main() {
                 }
             }
             "ctx" => {
-                print_context(&target, &world, &city);
+                print_context(&target, &world, &city, &pressure);
             }
             "loc" => {
                 print_location(&city);
@@ -268,6 +275,8 @@ fn main() {
                                             &player_pos,
                                             &mut event_log,
                                         );
+                                        update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                        world.pressure = pressure.to_modifiers();
                                         persist_world_state(
                                             &mut *world_repo,
                                             &world,
@@ -469,6 +478,8 @@ fn main() {
                                 decay_heat(&mut city, &cases);
                                 game_time.advance();
                                 storylet_state.tick();
+                                update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                world.pressure = pressure.to_modifiers();
 
                                 if let Some(end_reason) = tick_result.ended {
                                     println!("Combat ended: {}", format_combat_end(end_reason));
@@ -529,6 +540,7 @@ fn main() {
                     &mut player_pos,
                     &mut game_time,
                     &mut storylet_state,
+                    &mut pressure,
                     count,
                 );
                 persist_world_state(
@@ -541,7 +553,7 @@ fn main() {
                     &growth,
                     &storylet_state,
                 );
-                print_tick_summary(&world, &persona_stack, &city, &cases);
+                print_tick_summary(&world, &persona_stack, &city, &cases, &pressure);
                 print_case_log(&mut case_log);
             }
             _ => {
@@ -757,7 +769,12 @@ fn print_event_log(log: &mut WorldEventLog) {
     }
 }
 
-fn print_context(target: &TargetContext, world: &WorldState, city: &CityState) {
+fn print_context(
+    target: &TargetContext,
+    world: &WorldState,
+    city: &CityState,
+    pressure: &PressureState,
+) {
     let active = city
         .locations
         .get(&city.active_location)
@@ -774,6 +791,15 @@ fn print_context(target: &TargetContext, world: &WorldState, city: &CityState) {
         city.active_location.0,
         active.0,
         active.1
+    );
+    println!(
+        "Pressure: temporal={:.1} identity={:.1} institutional={:.1} moral={:.1} resource={:.1} psychological={:.1}",
+        pressure.temporal,
+        pressure.identity,
+        pressure.institutional,
+        pressure.moral,
+        pressure.resource,
+        pressure.psychological
     );
 }
 
@@ -1202,6 +1228,7 @@ fn tick_world(
     position: &mut Position,
     game_time: &mut GameTime,
     storylet_state: &mut StoryletState,
+    pressure: &mut PressureState,
     turns: u32,
 ) {
     for _ in 0..turns {
@@ -1232,6 +1259,8 @@ fn tick_world(
         );
         game_time.advance();
         storylet_state.tick();
+        update_pressure(pressure, city, scene, cases, game_time);
+        world.pressure = pressure.to_modifiers();
     }
 }
 
@@ -1609,7 +1638,13 @@ fn compare_numeric(left: i32, right: i32, op: &str) -> bool {
     }
 }
 
-fn print_tick_summary(world: &WorldState, stack: &PersonaStack, city: &CityState, cases: &CaseRegistry) {
+fn print_tick_summary(
+    world: &WorldState,
+    stack: &PersonaStack,
+    city: &CityState,
+    cases: &CaseRegistry,
+    pressure: &PressureState,
+) {
     let location = city.locations.get(&city.active_location);
     let (heat, response, crime) = location
         .map(|loc| (loc.heat, loc.response, loc.crime_pressure))
@@ -1639,4 +1674,13 @@ fn print_tick_summary(world: &WorldState, stack: &PersonaStack, city: &CityState
     if max_progress > 0 {
         println!("Case progress (max): {}", max_progress);
     }
+    println!(
+        "Pressure: temporal={:.1} identity={:.1} institutional={:.1} moral={:.1} resource={:.1} psychological={:.1}",
+        pressure.temporal,
+        pressure.identity,
+        pressure.institutional,
+        pressure.moral,
+        pressure.resource,
+        pressure.psychological
+    );
 }

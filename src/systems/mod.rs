@@ -6,6 +6,7 @@ pub mod event_resolver;
 pub mod faction;
 pub mod heat;
 pub mod persona;
+pub mod pressure;
 pub mod suspicion;
 pub mod units;
 
