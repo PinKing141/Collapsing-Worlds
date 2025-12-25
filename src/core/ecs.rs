@@ -3,6 +3,7 @@ use bevy_ecs::schedule::SystemSet;
 
 use crate::core::world::ActionQueue;
 use crate::core::world::IdAllocator;
+use crate::simulation::agents::{AgentEventLog, AgentRegistry};
 use crate::simulation::city::{CityEventLog, CityState};
 use crate::simulation::case::{CaseEventLog, CaseRegistry};
 use crate::simulation::evidence::WorldEvidence;
@@ -68,6 +69,8 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(load_nemesis_director());
     world.insert_resource(load_storylets());
     world.insert_resource(StoryletState::default());
+    world.insert_resource(load_agents());
+    world.insert_resource(AgentEventLog::default());
     world
 }
 
@@ -148,6 +151,16 @@ fn load_storylet_file(path: &str) -> Vec<Storylet> {
         Err(err) => {
             eprintln!("Failed to load storylets from {}: {}", path, err);
             Vec::new()
+        }
+    }
+}
+
+fn load_agents() -> AgentRegistry {
+    match AgentRegistry::load_default() {
+        Ok(registry) => registry,
+        Err(err) => {
+            eprintln!("Failed to load agent data: {}", err);
+            AgentRegistry::default()
         }
     }
 }
