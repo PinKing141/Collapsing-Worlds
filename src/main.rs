@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -2156,6 +2157,7 @@ struct StoryletContext {
     is_day: bool,
     stress: i32,
     reputation: i32,
+    flags: HashSet<String>,
 }
 
 struct StoryletEligibility {
@@ -2190,7 +2192,15 @@ fn list_storylets_available(
     cases: &CaseRegistry,
     game_time: &GameTime,
 ) {
-    let ctx = build_storylet_context(alignment, persona_stack, city, evidence, cases, game_time);
+    let ctx = build_storylet_context(
+        alignment,
+        persona_stack,
+        storylet_state,
+        city,
+        evidence,
+        cases,
+        game_time,
+    );
     let mut count = 0;
     if storylet_state.punctuation.only {
         println!(
@@ -2235,6 +2245,7 @@ fn list_storylets_available(
 fn build_storylet_context(
     alignment: Alignment,
     persona_stack: &PersonaStack,
+    storylet_state: &StoryletState,
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
@@ -2284,6 +2295,7 @@ fn build_storylet_context(
         is_day: game_time.is_day,
         stress: 0,
         reputation: 0,
+        flags: storylet_state.flags.keys().cloned().collect(),
     }
 }
 
@@ -2318,6 +2330,9 @@ fn eval_condition(condition: &str, ctx: &StoryletContext) -> bool {
     }
     if cond == "signatures.visible" {
         return ctx.has_visible_signatures;
+    }
+    if let Some(flag) = cond.strip_prefix("flag.") {
+        return ctx.flags.contains(flag);
     }
 
     let parts: Vec<&str> = cond.split_whitespace().collect();
