@@ -12,6 +12,7 @@ use crate::simulation::storylets::StoryletLibrary;
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::pressure::PressureState;
 use crate::simulation::time::{advance_time_system, GameTime};
+use crate::simulation::nemesis::NemesisState;
 use crate::systems::combat::{combat_system, CombatLog};
 use crate::systems::case::case_progress_system;
 use crate::systems::civilian::civilian_system;
@@ -19,6 +20,7 @@ use crate::systems::economy::economy_system;
 use crate::systems::event_resolver::{event_resolver_system, ResolvedFactionEventLog};
 use crate::systems::faction::{faction_director_system, FactionDirector, FactionEventLog};
 use crate::systems::heat::{heat_decay_system, signature_heat_system, update_active_location_system, WorldEventLog};
+use crate::systems::nemesis::{nemesis_system, NemesisDirector, NemesisEventLog};
 use crate::systems::movement_system;
 use crate::systems::persona::{persona_switch_system, PersonaEventLog};
 use crate::systems::pressure::pressure_system;
@@ -53,7 +55,10 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(PersonaEventLog::default());
     world.insert_resource(PressureState::default());
     world.insert_resource(CivilianState::default());
+    world.insert_resource(NemesisState::default());
+    world.insert_resource(NemesisEventLog::default());
     world.insert_resource(load_faction_director());
+    world.insert_resource(load_nemesis_director());
     world.insert_resource(load_storylets());
     world.insert_resource(StoryletState::default());
     world
@@ -78,6 +83,10 @@ pub fn create_schedule() -> Schedule {
             faction_director_system.in_set(TickSet::Simulation),
             event_resolver_system.in_set(TickSet::Simulation),
             case_progress_system.in_set(TickSet::Simulation),
+            nemesis_system
+                .in_set(TickSet::Simulation)
+                .after(case_progress_system)
+                .before(pressure_system),
             unit_movement_system.in_set(TickSet::Simulation),
             combat_system.in_set(TickSet::Simulation),
             pressure_system.in_set(TickSet::Simulation),
@@ -98,6 +107,16 @@ fn load_faction_director() -> FactionDirector {
         Err(err) => {
             eprintln!("Failed to load faction data: {}", err);
             FactionDirector::default()
+        }
+    }
+}
+
+fn load_nemesis_director() -> NemesisDirector {
+    match NemesisDirector::load_default() {
+        Ok(director) => director,
+        Err(err) => {
+            eprintln!("Failed to load nemesis actions: {}", err);
+            NemesisDirector::default()
         }
     }
 }
