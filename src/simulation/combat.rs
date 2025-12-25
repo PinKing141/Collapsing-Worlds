@@ -1,4 +1,5 @@
 use crate::rules::power::ExpressionId;
+use crate::rules::signature::SignatureInstance;
 use crate::simulation::city::LocationId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +32,22 @@ pub enum CombatEnd {
     PlayerDefeated,
     OpponentsDefeated,
     Resolved,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CombatPressureDelta {
+    pub temporal: f32,
+    pub identity: f32,
+    pub institutional: f32,
+    pub moral: f32,
+    pub resource: f32,
+    pub psychological: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct CombatConsequences {
+    pub signatures: Vec<SignatureInstance>,
+    pub pressure_delta: CombatPressureDelta,
 }
 
 #[derive(Debug, Clone)]

@@ -20,7 +20,9 @@ use superhero_universe::simulation::city::{CityEventLog, CityState};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
-use superhero_universe::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatState};
+use superhero_universe::simulation::combat::{
+    CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
+};
 use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
@@ -36,7 +38,8 @@ use superhero_universe::simulation::time::GameTime;
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
-    combat_tick, force_escalate, force_escape, resolve_combat, start_combat,
+    combat_end_consequences, combat_tick, force_escalate, force_escape, resolve_combat,
+    start_combat,
 };
 use superhero_universe::systems::event_resolver::{
     resolve_faction_events, ResolvedFactionEventLog,
@@ -674,6 +677,30 @@ fn main() {
                                     &region,
                                     &mut global_faction_events,
                                 );
+                                let end_reason = tick_result.ended;
+                                if let Some(end_reason) = end_reason {
+                                    handle_combat_end_consequences(
+                                        end_reason,
+                                        combat.scale,
+                                        combat.location_id,
+                                        &mut world,
+                                        &target,
+                                        &mut pressure,
+                                        &mut city,
+                                        &mut city_events,
+                                        &mut evidence,
+                                        &mut identity_evidence,
+                                        &mut faction_director,
+                                        &mut faction_events,
+                                        &mut resolved_faction_events,
+                                        &mut cases,
+                                        &mut case_log,
+                                        &mut persona_stack,
+                                        alignment,
+                                        &player_pos,
+                                        &mut event_log,
+                                    );
+                                }
                                 handle_transformation(
                                     &cases,
                                     &pressure,
@@ -681,8 +708,7 @@ fn main() {
                                     &mut storylet_state,
                                     &mut transformation_state,
                                 );
-
-                                if let Some(end_reason) = tick_result.ended {
+                                if let Some(end_reason) = end_reason {
                                     println!("Combat ended: {}", format_combat_end(end_reason));
                                     break;
                                 }
@@ -696,6 +722,27 @@ fn main() {
                     }
                     "resolve" => {
                         if let Some(end_reason) = resolve_combat(&mut combat) {
+                            handle_combat_end_consequences(
+                                end_reason,
+                                combat.scale,
+                                combat.location_id,
+                                &mut world,
+                                &target,
+                                &mut pressure,
+                                &mut city,
+                                &mut city_events,
+                                &mut evidence,
+                                &mut identity_evidence,
+                                &mut faction_director,
+                                &mut faction_events,
+                                &mut resolved_faction_events,
+                                &mut cases,
+                                &mut case_log,
+                                &mut persona_stack,
+                                alignment,
+                                &player_pos,
+                                &mut event_log,
+                            );
                             println!("Combat ended: {}", format_combat_end(end_reason));
                         } else {
                             println!("No active combat.");
@@ -703,6 +750,27 @@ fn main() {
                     }
                     "force_escape" => {
                         if let Some(end_reason) = force_escape(&mut combat) {
+                            handle_combat_end_consequences(
+                                end_reason,
+                                combat.scale,
+                                combat.location_id,
+                                &mut world,
+                                &target,
+                                &mut pressure,
+                                &mut city,
+                                &mut city_events,
+                                &mut evidence,
+                                &mut identity_evidence,
+                                &mut faction_director,
+                                &mut faction_events,
+                                &mut resolved_faction_events,
+                                &mut cases,
+                                &mut case_log,
+                                &mut persona_stack,
+                                alignment,
+                                &player_pos,
+                                &mut event_log,
+                            );
                             println!("Combat ended: {}", format_combat_end(end_reason));
                         } else {
                             println!("No active combat.");
@@ -1535,6 +1603,94 @@ fn apply_action_signatures(
         identity_evidence,
         &[],
         1,
+    );
+}
+
+fn apply_combat_pressure_delta(pressure: &mut PressureState, delta: CombatPressureDelta) {
+    pressure.temporal = (pressure.temporal + delta.temporal).clamp(0.0, 100.0);
+    pressure.identity = (pressure.identity + delta.identity).clamp(0.0, 100.0);
+    pressure.institutional = (pressure.institutional + delta.institutional).clamp(0.0, 100.0);
+    pressure.moral = (pressure.moral + delta.moral).clamp(0.0, 100.0);
+    pressure.resource = (pressure.resource + delta.resource).clamp(0.0, 100.0);
+    pressure.psychological = (pressure.psychological + delta.psychological).clamp(0.0, 100.0);
+}
+
+fn combat_case_progress_summary(
+    cases: &CaseRegistry,
+    location_id: superhero_universe::simulation::city::LocationId,
+) -> Vec<String> {
+    cases
+        .cases
+        .iter()
+        .filter(|case| case.location_id == location_id)
+        .map(|case| format!("case#{}:{}", case.case_id, case.progress))
+        .collect()
+}
+
+fn handle_combat_end_consequences(
+    end: CombatEnd,
+    scale: CombatScale,
+    location_id: superhero_universe::simulation::city::LocationId,
+    world: &mut WorldState,
+    target: &TargetContext,
+    pressure: &mut PressureState,
+    city: &mut CityState,
+    city_events: &mut CityEventLog,
+    evidence: &mut WorldEvidence,
+    identity_evidence: &mut IdentityEvidenceStore,
+    faction_director: &mut FactionDirector,
+    faction_events: &mut FactionEventLog,
+    resolved_faction_events: &mut ResolvedFactionEventLog,
+    cases: &mut CaseRegistry,
+    case_log: &mut CaseEventLog,
+    persona_stack: &mut PersonaStack,
+    alignment: Alignment,
+    player_pos: &Position,
+    event_log: &mut WorldEventLog,
+) {
+    let consequences = combat_end_consequences(end, scale);
+    if !consequences.signatures.is_empty() {
+        let witnesses = target.witnesses.saturating_add(4);
+        apply_action_signatures(
+            &consequences.signatures,
+            location_id,
+            world.turn,
+            witnesses,
+            target.in_public,
+            PersonaHint::Unknown,
+            city,
+            city_events,
+            evidence,
+            identity_evidence,
+            faction_director,
+            faction_events,
+            resolved_faction_events,
+            cases,
+            case_log,
+            persona_stack,
+            alignment,
+            player_pos,
+            event_log,
+        );
+    }
+
+    apply_combat_pressure_delta(pressure, consequences.pressure_delta);
+    world.pressure = pressure.to_modifiers();
+
+    let case_summary = combat_case_progress_summary(cases, location_id);
+    println!(
+        "Combat fallout: end={:?} signatures={} pressure(t={:.1} id={:.1} inst={:.1} moral={:.1} res={:.1} psy={:.1}) evidence={} identity_evidence={} cases=[{}]",
+        end,
+        consequences.signatures.len(),
+        pressure.temporal,
+        pressure.identity,
+        pressure.institutional,
+        pressure.moral,
+        pressure.resource,
+        pressure.psychological,
+        evidence.signatures.len(),
+        identity_evidence.items.len(),
+        case_summary.join(", ")
     );
 }
 
