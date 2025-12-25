@@ -51,6 +51,9 @@
       "label": "Psychic Countermeasure",
       "min_heat": 70,
       "min_case_progress": 80,
+      "signature_focus": [
+        "PSYCHIC_ECHO"
+      ],
       "signature_traces": [
         {
           "signature_type": "PSYCHIC_ECHO",
@@ -64,6 +67,100 @@
       },
       "case_progress_delta": 8,
       "notes": "Nemesis adapts with counter-signatures and psy-ops."
+    },
+    {
+      "id": "COUNTER_EM_SPIKE",
+      "label": "Counter EM Spike",
+      "min_heat": 40,
+      "min_case_progress": 30,
+      "signature_focus": [
+        "EM_SPIKE"
+      ],
+      "signature_traces": [
+        {
+          "signature_type": "EM_SPIKE",
+          "strength": 11,
+          "persistence_turns": 5
+        }
+      ],
+      "pressure_delta": {
+        "identity": 2.0,
+        "resource": 3.0
+      },
+      "case_progress_delta": 5,
+      "notes": "Targeted frequency dampeners tuned to repeated EM spike signatures."
+    },
+    {
+      "id": "COUNTER_THERMAL_BLOOM",
+      "label": "Thermal Bloom Counter-Strike",
+      "min_heat": 55,
+      "min_case_progress": 55,
+      "signature_focus": [
+        "THERMAL_BLOOM"
+      ],
+      "signature_traces": [
+        {
+          "signature_type": "THERMAL_BLOOM",
+          "strength": 13,
+          "persistence_turns": 5
+        },
+        {
+          "signature_type": "KINETIC_STRESS",
+          "strength": 9,
+          "persistence_turns": 4
+        }
+      ],
+      "pressure_delta": {
+        "institutional": 3.0,
+        "moral": 2.0
+      },
+      "case_progress_delta": 6,
+      "notes": "Counter-loadout spikes thermal signatures and forces evasive response."
+    },
+    {
+      "id": "MASKED_PROFILE_DRAGNET",
+      "label": "Masked Profile Dragnet",
+      "min_heat": 35,
+      "min_case_progress": 35,
+      "form_focus": [
+        "UNKNOWN_MASKED",
+        "KNOWN_MASKED"
+      ],
+      "signature_traces": [
+        {
+          "signature_type": "VISUAL_ANOMALY",
+          "strength": 7,
+          "persistence_turns": 4
+        }
+      ],
+      "pressure_delta": {
+        "identity": 4.0,
+        "institutional": 1.0
+      },
+      "case_progress_delta": 4,
+      "notes": "Public threat posture while tightening a masked-profile net."
+    },
+    {
+      "id": "CIVILIAN_SHADOW_HUNT",
+      "label": "Civilian Shadow Hunt",
+      "min_heat": 30,
+      "min_case_progress": 40,
+      "form_focus": [
+        "CIVILIAN_LINK"
+      ],
+      "signature_traces": [
+        {
+          "signature_type": "RADIATION_TRACE",
+          "strength": 6,
+          "persistence_turns": 5
+        }
+      ],
+      "pressure_delta": {
+        "identity": 3.0,
+        "psychological": 2.0
+      },
+      "case_progress_delta": 5,
+      "notes": "Secret hunt arc: surveillance pivots to civilian exposure."
     }
   ]
 }

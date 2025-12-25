@@ -20,6 +20,10 @@ pub struct NemesisActionDefinition {
     #[serde(default)]
     pub min_case_progress: u32,
     #[serde(default)]
+    pub signature_focus: Vec<SignatureType>,
+    #[serde(default)]
+    pub form_focus: Vec<String>,
+    #[serde(default)]
     pub signature_traces: Vec<NemesisSignatureTrace>,
     #[serde(default)]
     pub pressure_delta: NemesisPressureDelta,

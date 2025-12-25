@@ -8,8 +8,10 @@ use crate::rules::signature::{SignatureInstance, SignatureSpec, SignatureType};
 use crate::simulation::case::{CaseRegistry, CaseStatus, CaseTargetType};
 use crate::simulation::city::{CityState, LocationId};
 use crate::simulation::evidence::WorldEvidence;
-use crate::simulation::nemesis::{NemesisCandidate, NemesisMemory, NemesisState};
+use crate::simulation::identity_evidence::IdentityEvidenceStore;
+use crate::simulation::nemesis::{NemesisCandidate, NemesisMemory, NemesisPersonaArc, NemesisState};
 use crate::simulation::pressure::PressureState;
+use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
 
 const DEFAULT_NEMESIS_ACTIONS_PATH: &str = "./assets/data/nemesis_actions.json";
@@ -43,8 +45,10 @@ pub fn nemesis_system(
     city: Res<CityState>,
     mut cases: ResMut<CaseRegistry>,
     mut evidence: ResMut<WorldEvidence>,
+    identity_evidence: Res<IdentityEvidenceStore>,
     mut pressure: ResMut<PressureState>,
     time: Res<GameTime>,
+    mut storylets: ResMut<StoryletState>,
     mut log: ResMut<NemesisEventLog>,
 ) {
     run_nemesis_system(
@@ -53,8 +57,10 @@ pub fn nemesis_system(
         &city,
         &mut cases,
         &mut evidence,
+        &identity_evidence,
         &mut pressure,
         &time,
+        &mut storylets,
         &mut log,
     );
 }
@@ -65,8 +71,10 @@ pub fn run_nemesis_system(
     city: &CityState,
     cases: &mut CaseRegistry,
     evidence: &mut WorldEvidence,
+    identity_evidence: &IdentityEvidenceStore,
     pressure: &mut PressureState,
     time: &GameTime,
+    storylets: &mut StoryletState,
     log: &mut NemesisEventLog,
 ) {
     log.0.clear();
@@ -106,11 +114,11 @@ pub fn run_nemesis_system(
             Some(candidate) => {
                 candidate.heat = heat;
                 candidate.case_progress = snapshot.progress;
-                update_memory(&mut candidate.memory, snapshot);
+                update_memory(&mut candidate.memory, snapshot, identity_evidence);
             }
             None => {
                 let mut memory = NemesisMemory::default();
-                update_memory(&mut memory, snapshot);
+                update_memory(&mut memory, snapshot, identity_evidence);
                 state.candidates.push(NemesisCandidate {
                     faction_id: snapshot.faction_id.clone(),
                     location_id: snapshot.location_id,
@@ -118,8 +126,10 @@ pub fn run_nemesis_system(
                     case_progress: snapshot.progress,
                     memory,
                     adaptation_level: 0,
+                    persona_arc: NemesisPersonaArc::SecretHunt,
                     is_nemesis: false,
                     last_action_tick: 0,
+                    last_storylet_tick: 0,
                 });
             }
         }
@@ -155,6 +165,15 @@ pub fn run_nemesis_system(
             }
         }
 
+        let next_arc = determine_persona_arc(candidate);
+        if next_arc != candidate.persona_arc {
+            candidate.persona_arc = next_arc;
+            log.0.push(format!(
+                "Nemesis persona arc shifts: {} at location {} now {:?}.",
+                candidate.faction_id, candidate.location_id.0, candidate.persona_arc
+            ));
+        }
+
         let cooldown = state
             .thresholds
             .iter()
@@ -171,7 +190,13 @@ pub fn run_nemesis_system(
             continue;
         }
 
-        let Some(action) = select_action(director, candidate.heat, snapshot.progress) else {
+        let focus = build_counter_focus(candidate);
+        let Some(action) = select_action(
+            director,
+            candidate.heat,
+            snapshot.progress,
+            focus.as_ref(),
+        ) else {
             continue;
         };
 
@@ -181,6 +206,11 @@ pub fn run_nemesis_system(
             location_id: candidate.location_id,
             action,
         });
+
+        if should_trigger_confrontation(candidate, snapshot, time.tick) {
+            candidate.last_storylet_tick = time.tick;
+            emit_confrontation_storylet(candidate, storylets, log);
+        }
     }
 
     for trigger in actions_to_apply {
@@ -210,11 +240,23 @@ struct NemesisActionTrigger {
     action: NemesisActionDefinition,
 }
 
-fn update_memory(memory: &mut NemesisMemory, snapshot: &CaseSnapshot) {
+#[derive(Debug, Clone)]
+struct NemesisCounterFocus {
+    signature: Option<SignatureType>,
+    form: Option<String>,
+}
+
+fn update_memory(
+    memory: &mut NemesisMemory,
+    snapshot: &CaseSnapshot,
+    identity_evidence: &IdentityEvidenceStore,
+) {
     for signature in &snapshot.signatures {
         memory.record_signature(*signature);
     }
+    memory.record_signature_pattern(snapshot.signatures.clone());
     memory.record_form(case_form(snapshot.target_type));
+    record_identity_traits(memory, identity_evidence, snapshot.location_id);
 }
 
 fn case_form(target_type: CaseTargetType) -> String {
@@ -229,14 +271,115 @@ fn select_action(
     director: &NemesisDirector,
     heat: i32,
     case_progress: u32,
+    focus: Option<&NemesisCounterFocus>,
 ) -> Option<NemesisActionDefinition> {
     let mut candidates: Vec<&NemesisActionDefinition> = director
         .actions
         .iter()
         .filter(|action| action.min_heat as i32 <= heat && action.min_case_progress <= case_progress)
         .collect();
+    if let Some(focus) = focus {
+        let focused: Vec<&NemesisActionDefinition> = candidates
+            .iter()
+            .copied()
+            .filter(|action| action_matches_focus(action, focus))
+            .collect();
+        if !focused.is_empty() {
+            candidates = focused;
+        }
+    }
     candidates.sort_by_key(|action| (action.min_heat, action.min_case_progress));
     candidates.last().map(|action| (*action).clone())
+}
+
+fn action_matches_focus(action: &NemesisActionDefinition, focus: &NemesisCounterFocus) -> bool {
+    if let Some(signature) = focus.signature {
+        if action.signature_focus.iter().any(|sig| *sig == signature) {
+            return true;
+        }
+    }
+    if let Some(form) = &focus.form {
+        if action.form_focus.iter().any(|focus_form| focus_form == form) {
+            return true;
+        }
+    }
+    false
+}
+
+fn build_counter_focus(candidate: &NemesisCandidate) -> Option<NemesisCounterFocus> {
+    if candidate.adaptation_level == 0 {
+        return None;
+    }
+    let signature = candidate.memory.most_common_signature(2);
+    let form = match candidate.persona_arc {
+        NemesisPersonaArc::SecretHunt => candidate.memory.most_common_form(2),
+        NemesisPersonaArc::PublicThreat => None,
+    };
+    if signature.is_none() && form.is_none() {
+        None
+    } else {
+        Some(NemesisCounterFocus { signature, form })
+    }
+}
+
+fn determine_persona_arc(candidate: &NemesisCandidate) -> NemesisPersonaArc {
+    let identity_pressure = candidate.memory.identity_traits.len() >= 2;
+    if candidate.heat >= 60 || candidate.case_progress >= 70 {
+        NemesisPersonaArc::PublicThreat
+    } else if identity_pressure {
+        NemesisPersonaArc::SecretHunt
+    } else {
+        NemesisPersonaArc::SecretHunt
+    }
+}
+
+fn record_identity_traits(
+    memory: &mut NemesisMemory,
+    identity_evidence: &IdentityEvidenceStore,
+    location_id: LocationId,
+) {
+    for item in identity_evidence.items.iter() {
+        if item.location_id != location_id {
+            continue;
+        }
+        for trait_name in &item.suspect_features {
+            memory.record_identity_trait(trait_name.clone());
+        }
+    }
+}
+
+fn should_trigger_confrontation(
+    candidate: &NemesisCandidate,
+    snapshot: &CaseSnapshot,
+    tick: u64,
+) -> bool {
+    if !candidate.is_nemesis {
+        return false;
+    }
+    let heat_trigger = candidate.heat >= 70;
+    let progress_trigger = snapshot.progress >= 80;
+    let cooldown_ready = tick.saturating_sub(candidate.last_storylet_tick) >= 5;
+    cooldown_ready && (heat_trigger || progress_trigger)
+}
+
+fn emit_confrontation_storylet(
+    candidate: &NemesisCandidate,
+    storylets: &mut StoryletState,
+    log: &mut NemesisEventLog,
+) {
+    let flag = format!("nemesis_confrontation_{}", candidate.faction_id);
+    if storylets.flags.get(&flag).copied().unwrap_or(false) {
+        return;
+    }
+    storylets.flags.insert(flag.clone(), true);
+    storylets
+        .flags
+        .insert("nemesis_confrontation".to_string(), true);
+    storylets.punctuation.activate(2);
+    log.0.push(format!(
+        "Nemesis confrontation storylet triggered for {} at location {}.",
+        candidate.faction_id, candidate.location_id.0
+    ));
 }
 
 fn apply_action(

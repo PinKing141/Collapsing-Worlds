@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -2293,6 +2294,7 @@ fn storylet_passes_state_gates(storylet: &Storylet, storylet_state: &StoryletSta
 fn build_storylet_context(
     alignment: Alignment,
     persona_stack: &PersonaStack,
+    storylet_state: &StoryletState,
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
@@ -2405,6 +2407,9 @@ fn eval_condition(condition: &str, ctx: &StoryletContext) -> bool {
     }
     if cond == "signatures.visible" {
         return ctx.has_visible_signatures;
+    }
+    if let Some(flag) = cond.strip_prefix("flag.") {
+        return ctx.flags.contains(flag);
     }
 
     let parts: Vec<&str> = cond.split_whitespace().collect();
