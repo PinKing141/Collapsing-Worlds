@@ -2,9 +2,14 @@ use crate::rules::expression::{ExpressionDef, ExpressionForm};
 use crate::rules::mastery::MasteryStage;
 use crate::rules::power::ExpressionId;
 use crate::rules::signature::{SignatureInstance, SignatureSpec, SignatureType};
-use crate::rules::use_power::{use_power, ActorState, TargetContext, UseContext, UseError, WorldState};
-use crate::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatSide, CombatState, Combatant};
+use crate::rules::use_power::{
+    use_power, ActorState, TargetContext, UseContext, UseError, WorldState,
+};
 use crate::simulation::city::LocationId;
+use crate::simulation::combat::{
+    CombatEnd, CombatIntent, CombatOutcome, CombatPressureDelta, CombatScale, CombatSide,
+    CombatState, Combatant,
+};
 
 #[derive(Debug)]
 pub struct CombatTickResult {
@@ -13,6 +18,7 @@ pub struct CombatTickResult {
     pub escalated: bool,
     pub used_expression_id: Option<ExpressionId>,
     pub used_success: bool,
+    pub outcome: Option<CombatOutcome>,
 }
 
 impl Default for CombatTickResult {
@@ -23,6 +29,7 @@ impl Default for CombatTickResult {
             escalated: false,
             used_expression_id: None,
             used_success: false,
+            outcome: None,
         }
     }
 }
@@ -44,6 +51,7 @@ pub fn start_combat(
     state.combatants.clear();
     state.pending_player_expression = None;
     state.escape_progress = 0;
+    state.last_outcome = None;
 
     state.combatants.push(Combatant {
         id: 1,
@@ -85,9 +93,7 @@ pub fn combat_tick(
     }
 
     state.tick += 1;
-    state
-        .log
-        .push(format!("-- Combat tick {} --", state.tick));
+    state.log.push(format!("-- Combat tick {} --", state.tick));
 
     let player_intent = state
         .player()
@@ -112,7 +118,9 @@ pub fn combat_tick(
             };
             match use_power(&mut ctx, expr, target) {
                 Ok(use_result) => {
-                    result.emitted_signatures.extend(use_result.emitted_signatures);
+                    result
+                        .emitted_signatures
+                        .extend(use_result.emitted_signatures);
                     result.used_expression_id = Some(expr.id.clone());
                     result.used_success = true;
                     let stress = stress_from_form(expr.form);
@@ -175,10 +183,9 @@ pub fn combat_tick(
     if npc_stress > 0 {
         if let Some(player) = state.player_mut() {
             player.stress += npc_stress;
-            state.log.push(format!(
-                "Player takes pressure (stress +{}).",
-                npc_stress
-            ));
+            state
+                .log
+                .push(format!("Player takes pressure (stress +{}).", npc_stress));
         }
     }
 
@@ -186,8 +193,11 @@ pub fn combat_tick(
 
     let ended = evaluate_combat_end(state);
     if let Some(end_reason) = ended {
+        let outcome = build_combat_outcome(state, end_reason, &result.emitted_signatures);
+        state.last_outcome = Some(outcome.clone());
         finish_combat(state, end_reason);
         result.ended = Some(end_reason);
+        result.outcome = Some(outcome);
         return finalize_signatures(state.scale, result);
     }
 
@@ -199,9 +209,7 @@ pub fn combat_tick(
     if intensity >= escalation_threshold(state.scale) {
         if let Some(next) = next_scale(state.scale) {
             state.scale = next;
-            state
-                .log
-                .push(format!("Combat escalates to {:?}.", next));
+            state.log.push(format!("Combat escalates to {:?}.", next));
             result.escalated = true;
         }
     }
@@ -213,6 +221,8 @@ pub fn force_escape(state: &mut CombatState) -> Option<CombatEnd> {
     if !state.active {
         return None;
     }
+    let outcome = build_combat_outcome(state, CombatEnd::PlayerEscaped, &[]);
+    state.last_outcome = Some(outcome);
     finish_combat(state, CombatEnd::PlayerEscaped);
     Some(CombatEnd::PlayerEscaped)
 }
@@ -236,6 +246,8 @@ pub fn resolve_combat(state: &mut CombatState) -> Option<CombatEnd> {
     if !state.active {
         return None;
     }
+    let outcome = build_combat_outcome(state, CombatEnd::Resolved, &[]);
+    state.last_outcome = Some(outcome);
     finish_combat(state, CombatEnd::Resolved);
     Some(CombatEnd::Resolved)
 }
@@ -253,10 +265,7 @@ fn finish_combat(state: &mut CombatState, reason: CombatEnd) {
 }
 
 fn evaluate_combat_end(state: &mut CombatState) -> Option<CombatEnd> {
-    let player_down = state
-        .player()
-        .map(|p| p.stress >= 100)
-        .unwrap_or(false);
+    let player_down = state.player().map(|p| p.stress >= 100).unwrap_or(false);
     if player_down {
         return Some(CombatEnd::PlayerDefeated);
     }
@@ -336,7 +345,10 @@ fn next_scale(scale: CombatScale) -> Option<CombatScale> {
     }
 }
 
-fn amplify_signatures(signatures: &[SignatureInstance], scale: CombatScale) -> Vec<SignatureInstance> {
+fn amplify_signatures(
+    signatures: &[SignatureInstance],
+    scale: CombatScale,
+) -> Vec<SignatureInstance> {
     let bonus = match scale {
         CombatScale::Street => (6, 1),
         CombatScale::District => (10, 1),
@@ -359,4 +371,76 @@ fn amplify_signatures(signatures: &[SignatureInstance], scale: CombatScale) -> V
 
 fn log_use_failure(state: &mut CombatState, err: UseError) {
     state.log.push(format!("Power use failed: {:?}", err));
+}
+
+fn build_combat_outcome(
+    state: &CombatState,
+    end: CombatEnd,
+    _signatures: &[SignatureInstance],
+) -> CombatOutcome {
+    let mut outcome_signatures = Vec::new();
+    let (pressure_delta, witness_bonus, closure_signature) = match end {
+        CombatEnd::PlayerDefeated => (
+            CombatPressureDelta {
+                identity: 6.0,
+                moral: 5.0,
+                psychological: 4.0,
+                ..CombatPressureDelta::default()
+            },
+            4,
+            SignatureType::VisualAnomaly,
+        ),
+        CombatEnd::OpponentsDefeated => (
+            CombatPressureDelta {
+                institutional: 4.0,
+                moral: 3.0,
+                ..CombatPressureDelta::default()
+            },
+            3,
+            SignatureType::KineticStress,
+        ),
+        CombatEnd::PlayerEscaped => (
+            CombatPressureDelta {
+                temporal: 3.0,
+                psychological: 2.0,
+                ..CombatPressureDelta::default()
+            },
+            2,
+            SignatureType::AcousticShock,
+        ),
+        CombatEnd::Resolved => (
+            CombatPressureDelta {
+                institutional: 2.0,
+                resource: 2.0,
+                ..CombatPressureDelta::default()
+            },
+            1,
+            SignatureType::ChemicalResidue,
+        ),
+    };
+
+    let closure_signature = SignatureSpec {
+        signature_type: closure_signature,
+        strength: closure_signature_strength(state.scale),
+        persistence_turns: 4,
+    }
+    .to_instance();
+    outcome_signatures.push(closure_signature);
+
+    CombatOutcome {
+        end,
+        signatures: outcome_signatures,
+        pressure_delta,
+        witness_bonus,
+    }
+}
+
+fn closure_signature_strength(scale: CombatScale) -> i64 {
+    match scale {
+        CombatScale::Street => 10,
+        CombatScale::District => 14,
+        CombatScale::City => 18,
+        CombatScale::National => 22,
+        CombatScale::Cosmic => 28,
+    }
 }

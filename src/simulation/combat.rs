@@ -1,5 +1,7 @@
 use crate::rules::power::ExpressionId;
+use crate::rules::signature::SignatureInstance;
 use crate::simulation::city::LocationId;
+use crate::simulation::pressure::PressureState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CombatScale {
@@ -33,6 +35,35 @@ pub enum CombatEnd {
     Resolved,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CombatPressureDelta {
+    pub temporal: f32,
+    pub identity: f32,
+    pub institutional: f32,
+    pub moral: f32,
+    pub resource: f32,
+    pub psychological: f32,
+}
+
+impl CombatPressureDelta {
+    pub fn apply(self, pressure: &mut PressureState) {
+        pressure.temporal = (pressure.temporal + self.temporal).clamp(0.0, 100.0);
+        pressure.identity = (pressure.identity + self.identity).clamp(0.0, 100.0);
+        pressure.institutional = (pressure.institutional + self.institutional).clamp(0.0, 100.0);
+        pressure.moral = (pressure.moral + self.moral).clamp(0.0, 100.0);
+        pressure.resource = (pressure.resource + self.resource).clamp(0.0, 100.0);
+        pressure.psychological = (pressure.psychological + self.psychological).clamp(0.0, 100.0);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CombatOutcome {
+    pub end: CombatEnd,
+    pub signatures: Vec<SignatureInstance>,
+    pub pressure_delta: CombatPressureDelta,
+    pub witness_bonus: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct Combatant {
     pub id: u32,
@@ -54,6 +85,7 @@ pub struct CombatState {
     pub combatants: Vec<Combatant>,
     pub pending_player_expression: Option<ExpressionId>,
     pub escape_progress: u8,
+    pub last_outcome: Option<CombatOutcome>,
 }
 
 impl Default for CombatState {
@@ -68,6 +100,7 @@ impl Default for CombatState {
             combatants: Vec::new(),
             pending_player_expression: None,
             escape_progress: 0,
+            last_outcome: None,
         }
     }
 }

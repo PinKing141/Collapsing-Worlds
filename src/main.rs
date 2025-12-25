@@ -2,23 +2,27 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use superhero_universe::components::persona::{hero_persona_stack, Alignment, PersonaStack, PersonaType};
+use superhero_universe::components::persona::{
+    hero_persona_stack, Alignment, PersonaStack, PersonaType,
+};
 use superhero_universe::components::world::Position;
-use superhero_universe::core::world::ActionIntent;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
+use superhero_universe::core::world::ActionIntent;
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
-use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 use superhero_universe::rules::{
     can_use, use_power, ActorState, CostType, PressureModifiers, TargetContext, UseContext,
     WorldState,
 };
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
+use superhero_universe::simulation::city::{CityEventLog, CityState};
 use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
-use superhero_universe::simulation::city::{CityEventLog, CityState};
-use superhero_universe::simulation::combat::{CombatEnd, CombatIntent, CombatScale, CombatState};
+use superhero_universe::simulation::combat::{
+    CombatEnd, CombatIntent, CombatOutcome, CombatScale, CombatState,
+};
+use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -29,26 +33,29 @@ use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::StoryletLibrary;
 use superhero_universe::simulation::time::GameTime;
-use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
     combat_tick, force_escalate, force_escape, resolve_combat, start_combat,
 };
-use superhero_universe::systems::event_resolver::{resolve_faction_events, ResolvedFactionEventLog};
-use superhero_universe::systems::faction::{run_faction_director, FactionDirector, FactionEventLog};
+use superhero_universe::systems::event_resolver::{
+    resolve_faction_events, ResolvedFactionEventLog,
+};
+use superhero_universe::systems::faction::{
+    run_faction_director, FactionDirector, FactionEventLog,
+};
 use superhero_universe::systems::heat::{apply_signatures, decay_heat, WorldEventLog};
 use superhero_universe::systems::persona::{attempt_switch, PersonaSwitchError};
 use superhero_universe::systems::pressure::update_pressure;
 use superhero_universe::systems::region::{
-    run_global_faction_director, run_region_update, GlobalFactionDirector,
-    GlobalFactionEventLog,
+    run_global_faction_director, run_region_update, GlobalFactionDirector, GlobalFactionEventLog,
 };
 use superhero_universe::systems::suspicion::apply_suspicion_for_intents;
 use superhero_universe::systems::units::update_units;
+use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 
 fn main() {
-    println!("Initializing Superhero Universe (Rules Debug)...");    
+    println!("Initializing Superhero Universe (Rules Debug)...");
     let (content_db_path, world_db_path) = parse_paths(env::args().collect());
     if !content_db_path.exists() {
         eprintln!(
@@ -140,7 +147,11 @@ fn main() {
         &mut city_events,
         &mut region_events,
     );
-    run_global_faction_director(&mut global_faction_director, &region, &mut global_faction_events);
+    run_global_faction_director(
+        &mut global_faction_director,
+        &region,
+        &mut global_faction_events,
+    );
 
     let civilian_events = load_civilian_event_library();
 
@@ -270,15 +281,12 @@ fn main() {
                     let expr_id = ExpressionId(expr_raw.to_string());
                     match repo.expression(&expr_id) {
                         Ok(expr) => {
-    let mut ctx = UseContext {
-        actor: &mut actor,
-        world: &world,
-        mastery: growth
-            .mastery
-            .get(&expr.id)
-            .map(|entry| entry.stage),
-        unlocked: Some(&growth.unlocked_expressions),
-    };
+                            let mut ctx = UseContext {
+                                actor: &mut actor,
+                                world: &world,
+                                mastery: growth.mastery.get(&expr.id).map(|entry| entry.stage),
+                                unlocked: Some(&growth.unlocked_expressions),
+                            };
                             match can_use(&ctx, &expr, &target) {
                                 Ok(_) => match use_power(&mut ctx, &expr, &target) {
                                     Ok(result) => {
@@ -305,7 +313,13 @@ fn main() {
                                             &player_pos,
                                             &mut event_log,
                                         );
-                                        update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                        update_pressure(
+                                            &mut pressure,
+                                            &city,
+                                            &evidence,
+                                            &cases,
+                                            &game_time,
+                                        );
                                         apply_civilian_pressure(&civilian_state, &mut pressure);
                                         world.pressure = pressure.to_modifiers();
                                         run_region_update(
@@ -463,7 +477,8 @@ fn main() {
                         if !combat.active {
                             println!("No active combat. Use `combat start <label>` first.");
                         } else if let Some(expr_raw) = parts.next() {
-                            combat.pending_player_expression = Some(ExpressionId(expr_raw.to_string()));
+                            combat.pending_player_expression =
+                                Some(ExpressionId(expr_raw.to_string()));
                             println!("Queued expression {} for combat.", expr_raw);
                         } else {
                             println!("Usage: combat use <expression_id>");
@@ -570,7 +585,13 @@ fn main() {
                                 game_time.advance();
                                 tick_civilian_life(&mut civilian_state, &game_time);
                                 storylet_state.tick();
-                                update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                                update_pressure(
+                                    &mut pressure,
+                                    &city,
+                                    &evidence,
+                                    &cases,
+                                    &game_time,
+                                );
                                 apply_civilian_pressure(&civilian_state, &mut pressure);
                                 world.pressure = pressure.to_modifiers();
                                 run_region_update(
@@ -594,6 +615,30 @@ fn main() {
                                 );
 
                                 if let Some(end_reason) = tick_result.ended {
+                                    if let Some(outcome) = tick_result.outcome.as_ref() {
+                                        apply_combat_outcome(
+                                            outcome,
+                                            combat.location_id,
+                                            world.turn,
+                                            &target,
+                                            &mut city,
+                                            &mut city_events,
+                                            &mut evidence,
+                                            &mut identity_evidence,
+                                            &mut faction_director,
+                                            &mut faction_events,
+                                            &mut resolved_faction_events,
+                                            &mut cases,
+                                            &mut case_log,
+                                            &mut persona_stack,
+                                            alignment,
+                                            &player_pos,
+                                            &mut event_log,
+                                            &mut pressure,
+                                            &mut world,
+                                        );
+                                        combat.last_outcome = None;
+                                    }
                                     println!("Combat ended: {}", format_combat_end(end_reason));
                                     break;
                                 }
@@ -607,6 +652,29 @@ fn main() {
                     }
                     "resolve" => {
                         if let Some(end_reason) = resolve_combat(&mut combat) {
+                            if let Some(outcome) = combat.last_outcome.take() {
+                                apply_combat_outcome(
+                                    &outcome,
+                                    combat.location_id,
+                                    world.turn,
+                                    &target,
+                                    &mut city,
+                                    &mut city_events,
+                                    &mut evidence,
+                                    &mut identity_evidence,
+                                    &mut faction_director,
+                                    &mut faction_events,
+                                    &mut resolved_faction_events,
+                                    &mut cases,
+                                    &mut case_log,
+                                    &mut persona_stack,
+                                    alignment,
+                                    &player_pos,
+                                    &mut event_log,
+                                    &mut pressure,
+                                    &mut world,
+                                );
+                            }
                             println!("Combat ended: {}", format_combat_end(end_reason));
                         } else {
                             println!("No active combat.");
@@ -614,6 +682,29 @@ fn main() {
                     }
                     "force_escape" => {
                         if let Some(end_reason) = force_escape(&mut combat) {
+                            if let Some(outcome) = combat.last_outcome.take() {
+                                apply_combat_outcome(
+                                    &outcome,
+                                    combat.location_id,
+                                    world.turn,
+                                    &target,
+                                    &mut city,
+                                    &mut city_events,
+                                    &mut evidence,
+                                    &mut identity_evidence,
+                                    &mut faction_director,
+                                    &mut faction_events,
+                                    &mut resolved_faction_events,
+                                    &mut cases,
+                                    &mut case_log,
+                                    &mut persona_stack,
+                                    alignment,
+                                    &player_pos,
+                                    &mut event_log,
+                                    &mut pressure,
+                                    &mut world,
+                                );
+                            }
                             println!("Combat ended: {}", format_combat_end(end_reason));
                         } else {
                             println!("No active combat.");
@@ -876,9 +967,7 @@ fn print_use_result(result: &superhero_universe::rules::UseResult) {
         for sig in &result.emitted_signatures {
             println!(
                 "  {:?} strength={} persistence={}",
-                sig.signature.signature_type,
-                sig.signature.strength,
-                sig.remaining_turns
+                sig.signature.signature_type, sig.signature.strength, sig.remaining_turns
             );
         }
     }
@@ -1069,7 +1158,11 @@ fn handle_switch(
         println!("Unknown location.");
         return;
     };
-    let witnesses = if target.in_public { target.witnesses } else { 0 };
+    let witnesses = if target.in_public {
+        target.witnesses
+    } else {
+        0
+    };
     let has_visual = evidence.signatures.iter().any(|event| {
         event.location_id == location_id
             && event.signature.signature.signature_type
@@ -1296,7 +1389,10 @@ fn print_pending_civilian_events(
                 }
             }
             None => {
-                println!("  {} | (missing definition) | queued {} ticks ago", event.storylet_id, age);
+                println!(
+                    "  {} | (missing definition) | queued {} ticks ago",
+                    event.storylet_id, age
+                );
             }
         }
     }
@@ -1312,7 +1408,11 @@ fn resolve_civilian_event(
         println!("Unknown civilian event: {}", event_id);
         return;
     };
-    let Some(choice) = event_def.choices.iter().find(|choice| choice.id == choice_id) else {
+    let Some(choice) = event_def
+        .choices
+        .iter()
+        .find(|choice| choice.id == choice_id)
+    else {
         println!("Unknown choice {} for event {}", choice_id, event_id);
         return;
     };
@@ -1355,11 +1455,16 @@ fn record_identity_evidence(
     let (surveillance, in_public) = city
         .locations
         .get(&location_id)
-        .map(|loc| (loc.surveillance_level, loc.tags.contains(&superhero_universe::simulation::city::LocationTag::Public)))
+        .map(|loc| {
+            (
+                loc.surveillance_level,
+                loc.tags
+                    .contains(&superhero_universe::simulation::city::LocationTag::Public),
+            )
+        })
         .unwrap_or((0, true));
     let witness_count = if in_public { witnesses.max(1) } else { 0 };
-    let visual_quality = (surveillance as i32 + (witness_count as i32 * 10))
-        .clamp(0, 100) as u8;
+    let visual_quality = (surveillance as i32 + (witness_count as i32 * 10)).clamp(0, 100) as u8;
     for sig in signatures {
         identity.record(
             location_id,
@@ -1432,6 +1537,105 @@ fn apply_action_signatures(
         identity_evidence,
         &[],
         1,
+    );
+}
+
+fn apply_combat_outcome(
+    outcome: &CombatOutcome,
+    location_id: superhero_universe::simulation::city::LocationId,
+    turn: u64,
+    target: &TargetContext,
+    city: &mut CityState,
+    city_events: &mut CityEventLog,
+    evidence: &mut WorldEvidence,
+    identity_evidence: &mut IdentityEvidenceStore,
+    faction_director: &mut FactionDirector,
+    faction_events: &mut FactionEventLog,
+    resolved_faction_events: &mut ResolvedFactionEventLog,
+    cases: &mut CaseRegistry,
+    case_log: &mut CaseEventLog,
+    persona_stack: &mut PersonaStack,
+    alignment: Alignment,
+    player_pos: &Position,
+    event_log: &mut WorldEventLog,
+    pressure: &mut PressureState,
+    world: &mut WorldState,
+) {
+    let before_pressure = *pressure;
+    outcome.pressure_delta.apply(pressure);
+    world.pressure = pressure.to_modifiers();
+
+    let persona_hint = match persona_stack
+        .active_persona()
+        .map(|persona| persona.persona_type)
+    {
+        Some(PersonaType::Civilian) => PersonaHint::Civilian,
+        Some(PersonaType::Masked) => PersonaHint::Masked,
+        None => PersonaHint::Unknown,
+    };
+
+    let witnesses = target.witnesses.saturating_add(outcome.witness_bonus);
+    apply_action_signatures(
+        &outcome.signatures,
+        location_id,
+        turn,
+        witnesses,
+        target.in_public,
+        persona_hint,
+        city,
+        city_events,
+        evidence,
+        identity_evidence,
+        faction_director,
+        faction_events,
+        resolved_faction_events,
+        cases,
+        case_log,
+        persona_stack,
+        alignment,
+        player_pos,
+        event_log,
+    );
+
+    let max_case_progress = cases
+        .cases
+        .iter()
+        .filter(|case| case.location_id == location_id)
+        .map(|case| case.progress)
+        .max()
+        .unwrap_or(0);
+    println!(
+        "Combat outcome applied: {:?} signatures={} witnesses={} pressure_delta=({:.1},{:.1},{:.1},{:.1},{:.1},{:.1})",
+        outcome.end,
+        outcome.signatures.len(),
+        witnesses,
+        outcome.pressure_delta.temporal,
+        outcome.pressure_delta.identity,
+        outcome.pressure_delta.institutional,
+        outcome.pressure_delta.moral,
+        outcome.pressure_delta.resource,
+        outcome.pressure_delta.psychological
+    );
+    println!(
+        "Pressure: temporal={:.1}->{:.1} identity={:.1}->{:.1} institutional={:.1}->{:.1} moral={:.1}->{:.1} resource={:.1}->{:.1} psychological={:.1}->{:.1}",
+        before_pressure.temporal,
+        pressure.temporal,
+        before_pressure.identity,
+        pressure.identity,
+        before_pressure.institutional,
+        pressure.institutional,
+        before_pressure.moral,
+        pressure.moral,
+        before_pressure.resource,
+        pressure.resource,
+        before_pressure.psychological,
+        pressure.psychological
+    );
+    println!(
+        "Evidence totals: signatures={} identity_items={} max_case_progress_at_location={}",
+        evidence.signatures.len(),
+        identity_evidence.items.len(),
+        max_case_progress
     );
 }
 
@@ -1543,9 +1747,7 @@ fn transformation_text(state: TransformationState) -> &'static str {
         TransformationState::Ascension => {
             "Your power crests. The world bends to the new gravity you carry."
         }
-        TransformationState::Exile => {
-            "Faction attention becomes a net. Retreat to survive."
-        }
+        TransformationState::Exile => "Faction attention becomes a net. Retreat to survive.",
     }
 }
 
@@ -1578,7 +1780,10 @@ fn print_use_error(
         superhero_universe::rules::UseError::ConstraintFailed(reason) => {
             println!(
                 "Constraint: {} | requires_los={} requires_contact={} range_m={:?}",
-                reason, expr.constraints.requires_los, expr.constraints.requires_contact, expr.constraints.range_m
+                reason,
+                expr.constraints.requires_los,
+                expr.constraints.requires_contact,
+                expr.constraints.range_m
             );
             println!(
                 "Context: dist_m={:?} los={} contact={}",
@@ -1701,10 +1906,7 @@ fn list_storylets_all(library: &StoryletLibrary, alignment: Alignment) {
         } else {
             storylet.preconditions.join(" & ")
         };
-        println!(
-            "  {} | {:?} | {}",
-            storylet.id, storylet.category, prereqs
-        );
+        println!("  {} | {:?} | {}", storylet.id, storylet.category, prereqs);
     }
 }
 
@@ -1718,14 +1920,7 @@ fn list_storylets_available(
     cases: &CaseRegistry,
     game_time: &GameTime,
 ) {
-    let ctx = build_storylet_context(
-        alignment,
-        persona_stack,
-        city,
-        evidence,
-        cases,
-        game_time,
-    );
+    let ctx = build_storylet_context(alignment, persona_stack, city, evidence, cases, game_time);
     let mut count = 0;
     println!("Storylets available:");
     for storylet in library.for_alignment(alignment) {
@@ -1943,7 +2138,11 @@ fn print_tick_summary(
     let location = city.locations.get(&city.active_location);
     let (heat, response, crime) = location
         .map(|loc| (loc.heat, loc.response, loc.crime_pressure))
-        .unwrap_or((0, superhero_universe::simulation::city::HeatResponse::None, 0));
+        .unwrap_or((
+            0,
+            superhero_universe::simulation::city::HeatResponse::None,
+            0,
+        ));
     println!(
         "Turn {} | heat={} response={:?} crime_pressure={}",
         world.turn, heat, response, crime
