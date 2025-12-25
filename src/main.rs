@@ -30,7 +30,11 @@ use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
 };
 use superhero_universe::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
-use superhero_universe::simulation::origin::load_origin_catalog;
+use superhero_universe::simulation::origin::{
+    current_origin_stage, load_origin_catalog, load_origin_path_catalog, register_origin_event,
+    select_origin_paths, start_origin_path, tick_origin_path, OriginPathCatalog,
+    OriginPathDefinition, OriginQuestState, OriginStageReward,
+};
 use superhero_universe::simulation::pressure::PressureState;
 use superhero_universe::simulation::region::{RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
@@ -119,6 +123,14 @@ fn main() {
     let mut storylet_state = world_state.storylet_state;
     let mut growth = world_state.growth;
     let storylets = load_storylet_library();
+    let origin_paths = match load_origin_path_catalog("./assets/data/origin_paths.json") {
+        Ok(catalog) => catalog,
+        Err(err) => {
+            eprintln!("Failed to load origin paths: {}", err);
+            OriginPathCatalog::default()
+        }
+    };
+    let mut origin_quest = OriginQuestState::default();
     let mut player_pos = Position { x: 0, y: 0 };
     let mut pressure = PressureState::default();
     let mut faction_director = match FactionDirector::load_default() {
@@ -170,7 +182,7 @@ fn main() {
 
     let civilian_events = load_civilian_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -190,7 +202,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -475,6 +487,7 @@ fn main() {
                     &storylets,
                     &civilian_events,
                     &origin_catalog,
+                    &origin_paths,
                     &nemesis_catalog,
                 );
                 println!("{}", panel);
@@ -525,6 +538,72 @@ fn main() {
             "cases" => {
                 print_cases(&cases);
                 print_case_log(&mut case_log);
+            }
+            "origin" => {
+                let sub = parts.next().unwrap_or("").to_lowercase();
+                match sub.as_str() {
+                    "paths" => {
+                        let seed = parts
+                            .next()
+                            .and_then(|raw| raw.parse::<u64>().ok())
+                            .unwrap_or(world.turn);
+                        let count = parts
+                            .next()
+                            .and_then(|raw| raw.parse::<usize>().ok())
+                            .unwrap_or(3);
+                        let options = select_origin_paths(&origin_paths, None, seed, count);
+                        print_origin_paths(&options, seed);
+                    }
+                    "choose" => {
+                        let Some(path_id) = parts.next() else {
+                            println!("Usage: origin choose <path_id>");
+                            continue;
+                        };
+                        match start_origin_path(&mut origin_quest, &origin_paths, path_id) {
+                            Ok(path) => {
+                                println!("Origin path selected: {} - {}", path.label, path.summary);
+                                print_origin_path_status(&origin_quest, &origin_paths);
+                            }
+                            Err(err) => println!("Failed to start origin path: {}", err),
+                        }
+                    }
+                    "status" => {
+                        print_origin_path_status(&origin_quest, &origin_paths);
+                    }
+                    "event" => {
+                        let Some(event_tag) = parts.next() else {
+                            println!("Usage: origin event <tag>");
+                            continue;
+                        };
+                        let rewards =
+                            register_origin_event(&mut origin_quest, &origin_paths, event_tag);
+                        apply_origin_rewards(&rewards, &mut pressure);
+                        world.pressure = pressure.to_modifiers();
+                        if !rewards.is_empty() {
+                            print_origin_path_status(&origin_quest, &origin_paths);
+                        }
+                    }
+                    "tick" => {
+                        let count = parts
+                            .next()
+                            .and_then(|raw| raw.parse::<u32>().ok())
+                            .unwrap_or(1);
+                        for _ in 0..count {
+                            let rewards = tick_origin_path(&mut origin_quest, &origin_paths);
+                            apply_origin_rewards(&rewards, &mut pressure);
+                            world.pressure = pressure.to_modifiers();
+                            if !rewards.is_empty() {
+                                print_origin_path_status(&origin_quest, &origin_paths);
+                            }
+                        }
+                    }
+                    "" => {
+                        println!("Usage: origin [paths|choose|status|event|tick]");
+                    }
+                    _ => {
+                        println!("Usage: origin [paths|choose|status|event|tick]");
+                    }
+                }
             }
             "combat" => {
                 let sub = parts.next().unwrap_or("").to_lowercase();
@@ -827,6 +906,8 @@ fn main() {
                     &mut region_events,
                     &mut global_faction_director,
                     &mut global_faction_events,
+                    &mut origin_quest,
+                    &origin_paths,
                     count,
                 );
                 handle_transformation(
@@ -1809,6 +1890,8 @@ fn tick_world(
     region_events: &mut RegionEventLog,
     global_faction_director: &mut GlobalFactionDirector,
     global_faction_events: &mut GlobalFactionEventLog,
+    origin_quest: &mut OriginQuestState,
+    origin_paths: &OriginPathCatalog,
     turns: u32,
 ) {
     let mut agent_event_log = WorldEventLog::default();
@@ -1832,6 +1915,8 @@ fn tick_world(
         );
         tick_civilian_life(civilian_state, game_time);
         storylet_state.tick();
+        let rewards = tick_origin_path(origin_quest, origin_paths);
+        apply_origin_rewards(rewards.as_slice(), pressure);
         run_faction_director(faction_director, city, scene, faction_events);
         resolve_faction_events(
             faction_events,
@@ -2345,4 +2430,86 @@ fn print_tick_summary(
         pressure.resource,
         pressure.psychological
     );
+}
+
+fn print_origin_paths(paths: &[OriginPathDefinition], seed: u64) {
+    if paths.is_empty() {
+        println!("No origin paths available for seed {}.", seed);
+        return;
+    }
+    println!("Origin paths (seed={}):", seed);
+    for path in paths {
+        println!("  {} - {}: {}", path.id, path.label, path.summary);
+        if !path.stages.is_empty() {
+            let stage_ids: Vec<&str> = path.stages.iter().map(|stage| stage.id.as_str()).collect();
+            println!("    stages: {}", stage_ids.join(" -> "));
+        }
+    }
+}
+
+fn print_origin_path_status(state: &OriginQuestState, catalog: &OriginPathCatalog) {
+    let Some(path_id) = state.path_id.as_deref() else {
+        println!("Origin path: none selected.");
+        return;
+    };
+    let path = catalog.paths.iter().find(|path| path.id == path_id);
+    let Some(path) = path else {
+        println!("Origin path: {} (missing definition)", path_id);
+        return;
+    };
+    println!("Origin path: {} - {}", path.label, path.summary);
+    if state.completed {
+        println!("  status: complete ({} stages)", state.completed_stages.len());
+        return;
+    }
+    if let Some(stage) = current_origin_stage(state, catalog) {
+        let needed = stage.requirement.progress_needed.max(1);
+        println!(
+            "  stage: {} ({}) progress {}/{}",
+            stage.id, stage.label, state.stage_progress, needed
+        );
+    } else {
+        println!("  stage: none");
+    }
+}
+
+fn apply_origin_rewards(rewards: &[OriginStageReward], pressure: &mut PressureState) {
+    if rewards.is_empty() {
+        return;
+    }
+    for reward in rewards {
+        if reward.reputation_delta != 0 {
+            println!("Origin reward: reputation {}", reward.reputation_delta);
+        }
+        if reward.pressure_delta.temporal != 0.0
+            || reward.pressure_delta.identity != 0.0
+            || reward.pressure_delta.institutional != 0.0
+            || reward.pressure_delta.moral != 0.0
+            || reward.pressure_delta.resource != 0.0
+            || reward.pressure_delta.psychological != 0.0
+        {
+            pressure.temporal =
+                (pressure.temporal + reward.pressure_delta.temporal).clamp(0.0, 100.0);
+            pressure.identity =
+                (pressure.identity + reward.pressure_delta.identity).clamp(0.0, 100.0);
+            pressure.institutional = (pressure.institutional
+                + reward.pressure_delta.institutional)
+                .clamp(0.0, 100.0);
+            pressure.moral = (pressure.moral + reward.pressure_delta.moral).clamp(0.0, 100.0);
+            pressure.resource =
+                (pressure.resource + reward.pressure_delta.resource).clamp(0.0, 100.0);
+            pressure.psychological = (pressure.psychological + reward.pressure_delta.psychological)
+                .clamp(0.0, 100.0);
+            println!("Origin reward: pressure updated.");
+        }
+        if !reward.mutation_tags.is_empty() {
+            println!(
+                "Origin reward: mutations {}",
+                reward.mutation_tags.join(", ")
+            );
+        }
+        if let Some(notes) = reward.notes.as_deref() {
+            println!("Origin reward: {}", notes);
+        }
+    }
 }

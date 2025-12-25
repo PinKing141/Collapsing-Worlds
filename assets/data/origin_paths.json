@@ -1,0 +1,235 @@
+{
+  "paths": [
+    {
+      "id": "mentor_network",
+      "label": "Mentor Network",
+      "summary": "Track down veteran allies to stabilize your origin and learn the ropes.",
+      "availability": {
+        "weight": 2,
+        "required_origin_classes": ["ASCENDANT", "ALTERED"]
+      },
+      "stages": [
+        {
+          "id": "research",
+          "label": "Research",
+          "summary": "Sift archives and rumors for names that match your abilities.",
+          "requirement": {
+            "progress_needed": 2,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 1,
+            "pressure_delta": {
+              "identity": -1.0
+            },
+            "notes": "A whispered lead calms some of the identity pressure."
+          }
+        },
+        {
+          "id": "contact",
+          "label": "Contact",
+          "summary": "Reach out to trusted intermediaries to secure a meeting.",
+          "requirement": {
+            "progress_needed": 2,
+            "event_tags": ["CONTACT", "LEAD"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 1,
+            "pressure_delta": {
+              "institutional": -1.0
+            },
+            "notes": "The network lowers institutional scrutiny."
+          }
+        },
+        {
+          "id": "risk",
+          "label": "Risk",
+          "summary": "Meet in the open and prove you are worth the time.",
+          "requirement": {
+            "progress_needed": 2,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 2,
+            "pressure_delta": {
+              "resource": 1.5
+            },
+            "notes": "Resources tighten as favors are called in."
+          }
+        },
+        {
+          "id": "acquire",
+          "label": "Acquire",
+          "summary": "Receive access to a mentor, training, or a secure base.",
+          "requirement": {
+            "progress_needed": 1,
+            "event_tags": ["ACQUIRE"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 3,
+            "pressure_delta": {
+              "psychological": -2.0
+            },
+            "notes": "A mentor steadies your resolve."
+          }
+        }
+      ]
+    },
+    {
+      "id": "shadow_ops",
+      "label": "Shadow Ops",
+      "summary": "Work a covert pipeline to understand the forces hunting your origin.",
+      "availability": {
+        "weight": 1,
+        "required_origin_classes": ["FORGED", "BOUND"]
+      },
+      "stages": [
+        {
+          "id": "research",
+          "label": "Research",
+          "summary": "Analyze black-market chatter and encrypted dossiers.",
+          "requirement": {
+            "progress_needed": 2,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 0,
+            "pressure_delta": {
+              "resource": 1.0
+            },
+            "notes": "Intel costs more than expected."
+          }
+        },
+        {
+          "id": "contact",
+          "label": "Contact",
+          "summary": "Slip into the underworld and locate an operative.",
+          "requirement": {
+            "progress_needed": 2,
+            "event_tags": ["CONTACT", "INFILTRATE"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 1,
+            "pressure_delta": {
+              "moral": 1.5
+            },
+            "notes": "Compromises weigh on you."
+          }
+        },
+        {
+          "id": "risk",
+          "label": "Risk",
+          "summary": "Shadow a high-risk operation without blowing your cover.",
+          "requirement": {
+            "progress_needed": 3,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 2,
+            "pressure_delta": {
+              "institutional": 2.0
+            },
+            "notes": "Agencies take notice of your presence."
+          }
+        },
+        {
+          "id": "acquire",
+          "label": "Acquire",
+          "summary": "Steal a dossier or equipment cache that reveals the truth.",
+          "requirement": {
+            "progress_needed": 1,
+            "event_tags": ["ACQUIRE", "HEIST"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 3,
+            "pressure_delta": {
+              "resource": -2.0
+            },
+            "notes": "The haul alleviates resource pressure."
+          }
+        }
+      ]
+    },
+    {
+      "id": "cosmic_probe",
+      "label": "Cosmic Probe",
+      "summary": "Trace the anomaly that birthed your origin and claim a cosmic relic.",
+      "availability": {
+        "weight": 1,
+        "required_origin_classes": ["ASCENDANT"]
+      },
+      "stages": [
+        {
+          "id": "research",
+          "label": "Research",
+          "summary": "Map starfall patterns and temporal distortions.",
+          "requirement": {
+            "progress_needed": 2,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 1,
+            "pressure_delta": {
+              "temporal": 1.0
+            },
+            "notes": "The patterns hint at looming instability."
+          }
+        },
+        {
+          "id": "contact",
+          "label": "Contact",
+          "summary": "Seek a cult archivist who understands the anomaly.",
+          "requirement": {
+            "progress_needed": 2,
+            "event_tags": ["CONTACT", "RITUAL"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 1,
+            "pressure_delta": {
+              "psychological": 1.0
+            },
+            "notes": "The cult's demands are unsettling."
+          }
+        },
+        {
+          "id": "risk",
+          "label": "Risk",
+          "summary": "Enter a reality fracture to gather proof.",
+          "requirement": {
+            "progress_needed": 2,
+            "progress_per_tick": 1
+          },
+          "reward": {
+            "reputation_delta": 2,
+            "pressure_delta": {
+              "temporal": 2.0
+            },
+            "notes": "Time bends and resists your presence."
+          }
+        },
+        {
+          "id": "acquire",
+          "label": "Acquire",
+          "summary": "Claim the relic and stabilize the anomaly.",
+          "requirement": {
+            "progress_needed": 1,
+            "event_tags": ["ACQUIRE"],
+            "event_progress": 1
+          },
+          "reward": {
+            "reputation_delta": 4,
+            "pressure_delta": {
+              "psychological": -2.5
+            },
+            "notes": "The relic steadies your psyche."
+          }
+        }
+      ]
+    }
+  ]
+}
