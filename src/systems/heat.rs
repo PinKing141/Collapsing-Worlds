@@ -5,8 +5,12 @@ use crate::rules::signature::{SignatureInstance, SignatureType};
 use crate::simulation::case::CaseRegistry;
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityState, HeatResponse, LocationId, LocationTag};
 use crate::simulation::combat::CombatConsequence;
+=======
+use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityId, CityState, HeatResponse, LocationId, LocationTag};
+>>>>>>> Stashed changes
 =======
 use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityId, CityState, HeatResponse, LocationId, LocationTag};
 >>>>>>> Stashed changes
@@ -142,6 +146,7 @@ pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry, city_events: &mut 
         location.heat = (location.heat - decay).max(0);
         update_response(location, &mut log, city_id, city_events);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     }
 }
 
@@ -164,6 +169,8 @@ pub fn apply_combat_consequence_heat(
     if let Some(location) = city.locations.get_mut(&location_id) {
         location.heat = (location.heat + total_delta).clamp(0, 100);
         update_response(location, log, city, city_events);
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
     }

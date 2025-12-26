@@ -1,5 +1,6 @@
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
    0.435879300s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint: stale: changed "C:\\Users\\fezeh\\OneDrive\\Documents\\GitHub\\Collapsing-Worlds\\src\\data\\mod.rs"
    0.435995400s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint:           (vs) "C:\\Users\\fezeh\\OneDrive\\Documents\\GitHub\\Collapsing-Worlds\\target\\debug\\.fingerprint\\superhero-universe-74263e90fb779df6\\dep-lib-superhero_universe"
    0.436015800s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 13411185836, nanos: 172196200 } < FileTime { seconds: 13411185844, nanos: 143400500 }
@@ -21,6 +22,8 @@ error: could not compile `superhero-universe` (lib) due to 16 previous errors
 =======
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
    0.411170300s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint: stale: changed "C:\\Users\\fezeh\\OneDrive\\Documents\\GitHub\\Collapsing-Worlds\\src\\simulation\\storylet_state.rs"
    0.411224100s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint:           (vs) "C:\\Users\\fezeh\\OneDrive\\Documents\\GitHub\\Collapsing-Worlds\\target\\debug\\.fingerprint\\superhero-universe-2cc0b225b02537d5\\dep-test-lib-superhero_universe"
    0.411233300s  INFO prepare_target{force=false package_id=superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds) target="superhero_universe"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 13411122259, nanos: 797596400 } < FileTime { seconds: 13411174451, nanos: 988763300 }
@@ -29,6 +32,9 @@ error: could not compile `superhero-universe` (lib) due to 16 previous errors
     Checking superhero-universe v0.1.0 (C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds)
 error: could not compile `superhero-universe` (lib test) due to 2 previous errors
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
