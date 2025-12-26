@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use crate::data::civilian_events::CivilianStorylet;
+use crate::data::endgame_events::{EndgameEvent, EndgamePhase};
 use crate::data::nemesis::NemesisActionCatalog;
 use crate::data::storylets::StoryletCategory;
+use crate::simulation::endgame::EndgameState;
 use crate::simulation::origin::{OriginCatalog, OriginPathCatalog};
 use crate::simulation::storylets::{
     is_punctuation_storylet, storylet_has_gate_requirements, storylet_threshold_keys,
@@ -12,6 +14,8 @@ use crate::simulation::storylets::{
 pub fn render_authoring_dashboard(
     storylets: &StoryletLibrary,
     civilian_events: &[CivilianStorylet],
+    endgame_events: &[EndgameEvent],
+    endgame_state: &EndgameState,
     origins: &OriginCatalog,
     origin_paths: &OriginPathCatalog,
     nemesis_actions: &NemesisActionCatalog,
@@ -105,6 +109,22 @@ pub fn render_authoring_dashboard(
 
     output.push_str("\nCivilian Events\n");
     output.push_str(&format!("  Total: {}\n", civilian_events.len()));
+
+    output.push_str("\nEndgame\n");
+    output.push_str(&format!("  Current state: {}\n", endgame_state.label()));
+    output.push_str(&format!("  Events: {}\n", endgame_events.len()));
+    let mut phase_counts: HashMap<EndgamePhase, usize> = HashMap::new();
+    for event in endgame_events {
+        *phase_counts.entry(event.phase).or_insert(0) += 1;
+    }
+    if !phase_counts.is_empty() {
+        output.push_str("  Phases:\n");
+        let mut phases: Vec<(EndgamePhase, usize)> = phase_counts.into_iter().collect();
+        phases.sort_by_key(|(phase, _)| format!("{:?}", phase));
+        for (phase, count) in phases {
+            output.push_str(&format!("    {:?}: {}\n", phase, count));
+        }
+    }
 
     output.push_str("\nOrigins\n");
     output.push_str(&format!("  Total: {}\n", origins.origins.len()));

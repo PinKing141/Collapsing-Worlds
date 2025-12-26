@@ -11,6 +11,7 @@ use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, Sqlite
 use superhero_universe::core::world::ActionIntent;
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
 use superhero_universe::data::global_events::{load_global_event_catalog, GlobalEventDefinition};
+use superhero_universe::data::endgame_events::{load_endgame_event_catalog, EndgameEvent};
 use superhero_universe::data::nemesis::load_nemesis_action_catalog;
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::rules::{
@@ -28,7 +29,9 @@ use superhero_universe::simulation::civilian::{
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
-use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
+use superhero_universe::simulation::endgame::{
+    apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
+};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -174,7 +177,7 @@ fn main() {
     };
     let mut agent_events = AgentEventLog::default();
     let mut combat = world_state.combat;
-    let mut transformation_state: Option<TransformationState> = None;
+    let mut endgame_state = EndgameState::default();
     let mut target = TargetContext {
         distance_m: Some(10),
         has_line_of_sight: true,
@@ -185,7 +188,7 @@ fn main() {
     let mut civilian_state = CivilianState::default();
     update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
     apply_civilian_pressure(&civilian_state, &mut pressure);
-    world.pressure = pressure.to_modifiers();
+    apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
     run_region_update(
         &mut region,
         &city,
@@ -200,6 +203,7 @@ fn main() {
     );
 
     let civilian_events = load_civilian_event_library();
+    let endgame_events = load_endgame_event_library();
 
     println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
@@ -239,7 +243,7 @@ fn main() {
                 }
             }
             "ctx" => {
-                print_context(&target, &world, &city, &pressure, &region);
+                print_context(&target, &world, &city, &pressure, &endgame_state);
             }
             "loc" => {
                 print_location(&city);
@@ -368,7 +372,11 @@ fn main() {
                                             &game_time,
                                         );
                                         apply_civilian_pressure(&civilian_state, &mut pressure);
-                                        world.pressure = pressure.to_modifiers();
+                                        apply_pressure_modifiers(
+                                            &mut world,
+                                            &pressure,
+                                            &endgame_state,
+                                        );
                                         run_region_update(
                                             &mut region,
                                             &city,
@@ -381,12 +389,13 @@ fn main() {
                                             &region,
                                             &mut global_faction_events,
                                         );
-                                        handle_transformation(
+                                        handle_endgame_transition(
                                             &cases,
                                             &pressure,
                                             &resolved_faction_events,
+                                            &mut world,
                                             &mut storylet_state,
-                                            &mut transformation_state,
+                                            &mut endgame_state,
                                         );
                                         persist_world_state(
                                             &mut *world_repo,
@@ -439,6 +448,7 @@ fn main() {
                         alignment,
                         &persona_stack,
                         &storylet_state,
+                        &endgame_state,
                         &city,
                         &evidence,
                         &cases,
@@ -507,6 +517,8 @@ fn main() {
                 let panel = render_authoring_dashboard(
                     &storylets,
                     &civilian_events,
+                    &endgame_events,
+                    &endgame_state,
                     &origin_catalog,
                     &origin_paths,
                     &nemesis_catalog,
@@ -599,7 +611,7 @@ fn main() {
                         let rewards =
                             register_origin_event(&mut origin_quest, &origin_paths, event_tag);
                         apply_origin_rewards(&rewards, &mut pressure);
-                        world.pressure = pressure.to_modifiers();
+                        apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
                         if !rewards.is_empty() {
                             print_origin_path_status(&origin_quest, &origin_paths);
                         }
@@ -612,7 +624,7 @@ fn main() {
                         for _ in 0..count {
                             let rewards = tick_origin_path(&mut origin_quest, &origin_paths);
                             apply_origin_rewards(&rewards, &mut pressure);
-                            world.pressure = pressure.to_modifiers();
+                            apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
                             if !rewards.is_empty() {
                                 print_origin_path_status(&origin_quest, &origin_paths);
                             }
@@ -775,7 +787,7 @@ fn main() {
                                     &game_time,
                                 );
                                 apply_civilian_pressure(&civilian_state, &mut pressure);
-                                world.pressure = pressure.to_modifiers();
+                                apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
                                 run_region_update(
                                     &mut region,
                                     &city,
@@ -805,6 +817,7 @@ fn main() {
                                         &mut world,
                                         &target,
                                         &mut pressure,
+                                        &endgame_state,
                                         &mut city,
                                         &mut city_events,
                                         &mut evidence,
@@ -820,12 +833,13 @@ fn main() {
                                         &mut event_log,
                                     );
                                 }
-                                handle_transformation(
+                                handle_endgame_transition(
                                     &cases,
                                     &pressure,
                                     &resolved_faction_events,
+                                    &mut world,
                                     &mut storylet_state,
-                                    &mut transformation_state,
+                                    &mut endgame_state,
                                 );
                                 if let Some(end_reason) = end_reason {
                                     println!("Combat ended: {}", format_combat_end(end_reason));
@@ -850,6 +864,7 @@ fn main() {
                                 &mut world,
                                 &target,
                                 &mut pressure,
+                                &endgame_state,
                                 &mut city,
                                 &mut city_events,
                                 &mut evidence,
@@ -880,6 +895,7 @@ fn main() {
                                 &mut world,
                                 &target,
                                 &mut pressure,
+                                &endgame_state,
                                 &mut city,
                                 &mut city_events,
                                 &mut evidence,
@@ -937,6 +953,7 @@ fn main() {
                     &mut game_time,
                     &mut civilian_state,
                     &mut storylet_state,
+                    &mut endgame_state,
                     &mut pressure,
                     &mut region,
                     &mut region_events,
@@ -948,12 +965,13 @@ fn main() {
                     &origin_paths,
                     count,
                 );
-                handle_transformation(
+                handle_endgame_transition(
                     &cases,
                     &pressure,
                     &resolved_faction_events,
+                    &mut world,
                     &mut storylet_state,
-                    &mut transformation_state,
+                    &mut endgame_state,
                 );
                 persist_world_state(
                     &mut *world_repo,
@@ -965,7 +983,14 @@ fn main() {
                     &growth,
                     &storylet_state,
                 );
-                print_tick_summary(&world, &persona_stack, &city, &cases, &pressure);
+                print_tick_summary(
+                    &world,
+                    &persona_stack,
+                    &city,
+                    &cases,
+                    &pressure,
+                    &endgame_state,
+                );
                 print_case_log(&mut case_log);
             }
             _ => {
@@ -1184,7 +1209,7 @@ fn print_context(
     world: &WorldState,
     city: &CityState,
     pressure: &PressureState,
-    region: &RegionState,
+    endgame_state: &EndgameState,
 ) {
     let active = city
         .locations
@@ -1212,10 +1237,22 @@ fn print_context(
         pressure.resource,
         pressure.psychological
     );
+    let modifiers = endgame_state.modifiers();
     println!(
-        "Global escalation: {:?} (pressure={:.1})",
-        region.global_pressure.escalation, region.global_pressure.total
+        "Endgame: {} | modifiers cost={:.2} risk={:.2}",
+        endgame_state.label(),
+        modifiers.cost_scale,
+        modifiers.risk_scale
     );
+}
+
+fn apply_pressure_modifiers(
+    world: &mut WorldState,
+    pressure: &PressureState,
+    endgame_state: &EndgameState,
+) {
+    let base = pressure.to_modifiers();
+    world.pressure = endgame_state.apply_modifiers(base);
 }
 
 fn print_combat_status(state: &CombatState) {
@@ -1901,6 +1938,7 @@ fn handle_combat_end_consequences(
     world: &mut WorldState,
     target: &TargetContext,
     pressure: &mut PressureState,
+    endgame_state: &EndgameState,
     city: &mut CityState,
     city_events: &mut CityEventLog,
     evidence: &mut WorldEvidence,
@@ -1951,7 +1989,7 @@ fn handle_combat_end_consequences(
     );
 
     apply_combat_pressure_delta(pressure, consequences.pressure_delta);
-    world.pressure = pressure.to_modifiers();
+    apply_pressure_modifiers(world, pressure, endgame_state);
 
     let case_summary = combat_case_progress_summary(cases, location_id);
     println!(
@@ -1994,6 +2032,7 @@ fn tick_world(
     game_time: &mut GameTime,
     civilian_state: &mut CivilianState,
     storylet_state: &mut StoryletState,
+    endgame_state: &mut EndgameState,
     pressure: &mut PressureState,
     region: &mut RegionState,
     region_events: &mut RegionEventLog,
@@ -2050,11 +2089,12 @@ fn tick_world(
         );
         update_pressure(pressure, city, scene, cases, game_time);
         apply_civilian_pressure(civilian_state, pressure);
-        world.pressure = pressure.to_modifiers();
+        apply_pressure_modifiers(world, pressure, endgame_state);
         let ctx = build_storylet_context(
             alignment,
             persona_stack,
             storylet_state,
+            endgame_state,
             city,
             scene,
             cases,
@@ -2103,52 +2143,24 @@ fn apply_global_event_effects(
 }
 
 fn handle_transformation(
+fn handle_endgame_transition(
     cases: &CaseRegistry,
     pressure: &PressureState,
     faction_events: &ResolvedFactionEventLog,
+    world: &mut WorldState,
     storylet_state: &mut StoryletState,
-    last_state: &mut Option<TransformationState>,
+    endgame_state: &mut EndgameState,
 ) {
     if let Some(event) = evaluate_transformation(cases, pressure, faction_events) {
-        let flag = transformation_flag(event.state);
-        if storylet_state.flags.get(flag).copied().unwrap_or(false) {
-            return;
+        if let Some(update) =
+            apply_transformation_event(endgame_state, storylet_state, event)
+        {
+            apply_pressure_modifiers(world, pressure, endgame_state);
+            println!(
+                "Endgame triggered ({:?}): {}",
+                update.event.trigger, update.narrative
+            );
         }
-        storylet_state.flags.insert(flag.to_string(), true);
-        *last_state = Some(event.state);
-        println!(
-            "Transformation triggered ({:?}): {}",
-            event.trigger,
-            transformation_text(event.state)
-        );
-    }
-}
-
-fn transformation_flag(state: TransformationState) -> &'static str {
-    match state {
-        TransformationState::Exposed => "transformation_exposed",
-        TransformationState::Registration => "transformation_registration",
-        TransformationState::CosmicJudgement => "transformation_cosmic_judgement",
-        TransformationState::Ascension => "transformation_ascension",
-        TransformationState::Exile => "transformation_exile",
-    }
-}
-
-fn transformation_text(state: TransformationState) -> &'static str {
-    match state {
-        TransformationState::Exposed => {
-            "Your cover breaks. The city has a name and a face for you."
-        }
-        TransformationState::Registration => {
-            "The registries open. Compliance or resistance becomes the story."
-        }
-        TransformationState::CosmicJudgement => {
-            "The signal rises beyond the city. Something vast takes notice."
-        }
-        TransformationState::Ascension => {
-            "Your power crests. The world bends to the new gravity you carry."
-        }
-        TransformationState::Exile => "Faction attention becomes a net. Retreat to survive.",
     }
 }
 
@@ -2272,9 +2284,21 @@ fn load_civilian_event_library() -> Vec<CivilianStorylet> {
     }
 }
 
+fn load_endgame_event_library() -> Vec<EndgameEvent> {
+    match load_endgame_event_catalog("./assets/data/endgame_events.json") {
+        Ok(catalog) => catalog.events,
+        Err(err) => {
+            eprintln!("Failed to load endgame events: {}", err);
+            Vec::new()
+        }
+    }
+}
+
 struct StoryletContext {
     alignment: Alignment,
     active_persona: Option<PersonaType>,
+    flags: HashSet<String>,
+    endgame_state: Option<TransformationState>,
     public_suspicion: i32,
     civilian_suspicion: i32,
     wanted_level: i32,
@@ -2323,6 +2347,7 @@ fn list_storylets_available(
     alignment: Alignment,
     persona_stack: &PersonaStack,
     storylet_state: &StoryletState,
+    endgame_state: &EndgameState,
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
@@ -2333,6 +2358,7 @@ fn list_storylets_available(
         alignment,
         persona_stack,
         storylet_state,
+        endgame_state,
         city,
         evidence,
         cases,
@@ -2403,6 +2429,7 @@ fn build_storylet_context(
     alignment: Alignment,
     persona_stack: &PersonaStack,
     storylet_state: &StoryletState,
+    endgame_state: &EndgameState,
     city: &CityState,
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
@@ -2437,6 +2464,11 @@ fn build_storylet_context(
     let has_visible_signatures = evidence.signatures.iter().any(|event| {
         event.location_id == city.active_location && event.signature.remaining_turns > 0
     });
+    let flags = storylet_state
+        .flags
+        .iter()
+        .filter_map(|(flag, enabled)| enabled.then(|| flag.clone()))
+        .collect();
 
     let flags = storylet_state
         .flags
@@ -2447,6 +2479,8 @@ fn build_storylet_context(
     StoryletContext {
         alignment,
         active_persona: active_persona.map(|persona| persona.persona_type),
+        flags,
+        endgame_state: endgame_state.phase,
         public_suspicion,
         civilian_suspicion,
         wanted_level,
@@ -2557,6 +2591,16 @@ fn eval_condition(condition: &str, ctx: &StoryletContext) -> bool {
                 _ => false,
             }
         }
+        "endgame.state" => {
+            let Some(expected) = parse_endgame_state(right) else {
+                return false;
+            };
+            match op {
+                "==" => ctx.endgame_state == Some(expected),
+                "!=" => ctx.endgame_state != Some(expected),
+                _ => false,
+            }
+        }
         _ => {
             let Some(left_value) = numeric_metric(left, ctx) else {
                 return false;
@@ -2582,6 +2626,17 @@ fn parse_persona_type(value: &str) -> Option<PersonaType> {
     match value.to_ascii_uppercase().as_str() {
         "CIVILIAN" => Some(PersonaType::Civilian),
         "MASKED" => Some(PersonaType::Masked),
+        _ => None,
+    }
+}
+
+fn parse_endgame_state(value: &str) -> Option<TransformationState> {
+    match value.to_ascii_uppercase().as_str() {
+        "EXPOSED" => Some(TransformationState::Exposed),
+        "REGISTRATION" => Some(TransformationState::Registration),
+        "COSMIC_JUDGEMENT" | "COSMIC_JUDGMENT" => Some(TransformationState::CosmicJudgement),
+        "ASCENSION" => Some(TransformationState::Ascension),
+        "EXILE" => Some(TransformationState::Exile),
         _ => None,
     }
 }
@@ -2626,6 +2681,7 @@ fn print_tick_summary(
     city: &CityState,
     cases: &CaseRegistry,
     pressure: &PressureState,
+    endgame_state: &EndgameState,
 ) {
     let location = city.locations.get(&city.active_location);
     let (heat, response, crime) = location
@@ -2668,6 +2724,13 @@ fn print_tick_summary(
         pressure.moral,
         pressure.resource,
         pressure.psychological
+    );
+    let modifiers = endgame_state.modifiers();
+    println!(
+        "Endgame: {} | modifiers cost={:.2} risk={:.2}",
+        endgame_state.label(),
+        modifiers.cost_scale,
+        modifiers.risk_scale
     );
 }
 
