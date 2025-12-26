@@ -27,11 +27,14 @@ use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
 <<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
@@ -194,9 +197,12 @@ fn main() {
     let mut agent_events = AgentEventLog::default();
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     let mut combat = world_state.combat;
     let mut endgame_state = EndgameState::default();
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
     let mut combat = combat;
@@ -1049,6 +1055,7 @@ fn main() {
                     &persona_stack,
                     alignment,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                 );
                 print_tick_summary(
                     &world,
@@ -1057,6 +1064,8 @@ fn main() {
                     &cases,
                     &pressure,
                     &endgame_state,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
                 );
@@ -2164,7 +2173,10 @@ fn tick_world(
             storylet_state,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             endgame_state,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
@@ -2334,6 +2346,7 @@ fn load_civilian_event_library() -> Vec<CivilianStorylet> {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 fn load_endgame_event_library() -> Vec<EndgameEvent> {
     match load_endgame_event_catalog("./assets/data/endgame_events.json") {
         Ok(catalog) => catalog.events,
@@ -2342,6 +2355,8 @@ fn load_endgame_event_library() -> Vec<EndgameEvent> {
             Vec::new()
         }
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 fn print_cast(characters: &[PersistentCharacter]) {
@@ -2364,6 +2379,9 @@ fn print_cast(characters: &[PersistentCharacter]) {
     if characters.len() > 10 {
         println!("  ...");
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -2376,7 +2394,10 @@ struct StoryletContext {
     flags: HashSet<String>,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     endgame_state: Option<TransformationState>,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
@@ -2441,7 +2462,10 @@ fn list_storylets_available(
         storylet_state,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         endgame_state,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
@@ -2568,7 +2592,10 @@ fn build_storylet_context(
         flags,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         endgame_state: endgame_state.phase,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 =======
