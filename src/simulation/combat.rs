@@ -44,10 +44,18 @@ pub struct CombatPressureDelta {
     pub psychological: f32,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CombatConsequence {
+    pub publicness: u8,
+    pub collateral: u8,
+    pub notoriety: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct CombatConsequences {
     pub signatures: Vec<SignatureInstance>,
     pub pressure_delta: CombatPressureDelta,
+    pub combat_consequence: CombatConsequence,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +79,7 @@ pub struct CombatState {
     pub combatants: Vec<Combatant>,
     pub pending_player_expression: Option<ExpressionId>,
     pub escape_progress: u8,
+    pub rng_state: u64,
 }
 
 impl Default for CombatState {
@@ -85,6 +94,7 @@ impl Default for CombatState {
             combatants: Vec::new(),
             pending_player_expression: None,
             escape_progress: 0,
+            rng_state: 0,
         }
     }
 }

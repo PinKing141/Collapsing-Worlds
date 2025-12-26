@@ -25,14 +25,16 @@ use superhero_universe::simulation::civilian::{
     apply_civilian_effects, tick_civilian_life, CivilianState,
 };
 use superhero_universe::simulation::combat::{
-    CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
+    CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
 use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
 };
-use superhero_universe::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
+use superhero_universe::simulation::identity_evidence::{
+    combat_consequence_modifiers, IdentityEvidenceModifiers, IdentityEvidenceStore, PersonaHint,
+};
 use superhero_universe::simulation::origin::{
     current_origin_stage, load_origin_catalog, load_origin_path_catalog, register_origin_event,
     select_origin_paths, start_origin_path, tick_origin_path, OriginPathCatalog,
@@ -48,7 +50,7 @@ use superhero_universe::simulation::time::GameTime;
 use superhero_universe::systems::case::update_cases;
 use superhero_universe::systems::civilian::apply_civilian_pressure;
 use superhero_universe::systems::combat_loop::{
-    combat_end_consequences, combat_tick, force_escalate, force_escape, resolve_combat,
+    combat_post_consequences, combat_tick, force_escalate, force_escape, resolve_combat,
     start_combat,
 };
 use superhero_universe::systems::event_resolver::{
@@ -57,7 +59,9 @@ use superhero_universe::systems::event_resolver::{
 use superhero_universe::systems::faction::{
     run_faction_director, FactionDirector, FactionEventLog,
 };
-use superhero_universe::systems::heat::{apply_signatures, decay_heat, WorldEventLog};
+use superhero_universe::systems::heat::{
+    apply_combat_consequence_heat, apply_signatures, decay_heat, WorldEventLog,
+};
 use superhero_universe::systems::persona::{attempt_switch, PersonaSwitchError};
 use superhero_universe::systems::pressure::update_pressure;
 use superhero_universe::systems::region::{
@@ -332,6 +336,7 @@ fn main() {
                                             target.witnesses,
                                             target.in_public,
                                             PersonaHint::Unknown,
+                                            None,
                                             &mut city,
                                             &mut city_events,
                                             &mut evidence,
@@ -636,6 +641,7 @@ fn main() {
                             scale,
                             &player_name,
                             opponent_count,
+                            world.turn,
                         );
                         print_combat_status(&combat);
                     }
@@ -727,6 +733,7 @@ fn main() {
                                         witnesses,
                                         target.in_public,
                                         PersonaHint::Unknown,
+                                        None,
                                         &mut city,
                                         &mut city_events,
                                         &mut evidence,
@@ -774,9 +781,18 @@ fn main() {
                                 );
                                 let end_reason = tick_result.ended;
                                 if let Some(end_reason) = end_reason {
+                                    let consequences = tick_result
+                                        .post_combat_consequences
+                                        .unwrap_or_else(|| {
+                                            combat_post_consequences(
+                                                &mut combat,
+                                                end_reason,
+                                                &target,
+                                            )
+                                        });
                                     handle_combat_end_consequences(
                                         end_reason,
-                                        combat.scale,
+                                        consequences,
                                         combat.location_id,
                                         &mut world,
                                         &target,
@@ -817,9 +833,11 @@ fn main() {
                     }
                     "resolve" => {
                         if let Some(end_reason) = resolve_combat(&mut combat) {
+                            let consequences =
+                                combat_post_consequences(&mut combat, end_reason, &target);
                             handle_combat_end_consequences(
                                 end_reason,
-                                combat.scale,
+                                consequences,
                                 combat.location_id,
                                 &mut world,
                                 &target,
@@ -845,9 +863,11 @@ fn main() {
                     }
                     "force_escape" => {
                         if let Some(end_reason) = force_escape(&mut combat) {
+                            let consequences =
+                                combat_post_consequences(&mut combat, end_reason, &target);
                             handle_combat_end_consequences(
                                 end_reason,
-                                combat.scale,
+                                consequences,
                                 combat.location_id,
                                 &mut world,
                                 &target,
@@ -1643,6 +1663,7 @@ fn record_identity_evidence(
     signatures: &[superhero_universe::rules::SignatureInstance],
     witnesses: u32,
     persona_hint: PersonaHint,
+    modifiers: Option<IdentityEvidenceModifiers>,
 ) {
     let (surveillance, in_public) = city
         .locations
@@ -1655,8 +1676,18 @@ fn record_identity_evidence(
             )
         })
         .unwrap_or((0, true));
-    let witness_count = if in_public { witnesses.max(1) } else { 0 };
-    let visual_quality = (surveillance as i32 + (witness_count as i32 * 10)).clamp(0, 100) as u8;
+    let modifiers = modifiers.unwrap_or_default();
+    let witness_count = if in_public {
+        witnesses
+            .max(1)
+            .saturating_add(modifiers.witness_bonus)
+    } else {
+        0
+    };
+    let visual_quality = (surveillance as i32
+        + (witness_count as i32 * 10)
+        + modifiers.visual_bonus)
+        .clamp(0, 100) as u8;
     for sig in signatures {
         identity.record(
             location_id,
@@ -1746,6 +1777,7 @@ fn apply_agent_incident(
         signatures,
         witnesses,
         PersonaHint::Unknown,
+        None,
     );
 }
 
@@ -1756,6 +1788,7 @@ fn apply_action_signatures(
     witnesses: u32,
     in_public: bool,
     persona_hint: PersonaHint,
+    identity_modifiers: Option<IdentityEvidenceModifiers>,
     city: &mut CityState,
     city_events: &mut CityEventLog,
     evidence: &mut WorldEvidence,
@@ -1788,6 +1821,7 @@ fn apply_action_signatures(
         signatures,
         witnesses,
         persona_hint,
+        identity_modifiers,
     );
     run_faction_director(faction_director, city, evidence, faction_events);
     resolve_faction_events(
@@ -1834,7 +1868,7 @@ fn combat_case_progress_summary(
 
 fn handle_combat_end_consequences(
     end: CombatEnd,
-    scale: CombatScale,
+    consequences: CombatConsequences,
     location_id: superhero_universe::simulation::city::LocationId,
     world: &mut WorldState,
     target: &TargetContext,
@@ -1853,9 +1887,9 @@ fn handle_combat_end_consequences(
     player_pos: &Position,
     event_log: &mut WorldEventLog,
 ) {
-    let consequences = combat_end_consequences(end, scale);
     if !consequences.signatures.is_empty() {
         let witnesses = target.witnesses.saturating_add(4);
+        let identity_modifiers = combat_consequence_modifiers(consequences.combat_consequence);
         apply_action_signatures(
             &consequences.signatures,
             location_id,
@@ -1863,6 +1897,7 @@ fn handle_combat_end_consequences(
             witnesses,
             target.in_public,
             PersonaHint::Unknown,
+            Some(identity_modifiers),
             city,
             city_events,
             evidence,
@@ -1879,14 +1914,25 @@ fn handle_combat_end_consequences(
         );
     }
 
+    apply_combat_consequence_heat(
+        city,
+        location_id,
+        consequences.combat_consequence,
+        event_log,
+        city_events,
+    );
+
     apply_combat_pressure_delta(pressure, consequences.pressure_delta);
     world.pressure = pressure.to_modifiers();
 
     let case_summary = combat_case_progress_summary(cases, location_id);
     println!(
-        "Combat fallout: end={:?} signatures={} pressure(t={:.1} id={:.1} inst={:.1} moral={:.1} res={:.1} psy={:.1}) evidence={} identity_evidence={} cases=[{}]",
+        "Combat fallout: end={:?} signatures={} consequence(p={} c={} n={}) pressure(t={:.1} id={:.1} inst={:.1} moral={:.1} res={:.1} psy={:.1}) evidence={} identity_evidence={} cases=[{}]",
         end,
         consequences.signatures.len(),
+        consequences.combat_consequence.publicness,
+        consequences.combat_consequence.collateral,
+        consequences.combat_consequence.notoriety,
         pressure.temporal,
         pressure.identity,
         pressure.institutional,

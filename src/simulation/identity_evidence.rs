@@ -2,6 +2,7 @@ use bevy_ecs::prelude::*;
 
 use crate::rules::signature::SignatureType;
 use crate::simulation::city::LocationId;
+use crate::simulation::combat::CombatConsequence;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PersonaHint {
@@ -28,6 +29,12 @@ pub struct IdentityEvidenceStore {
     next_id: u32,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IdentityEvidenceModifiers {
+    pub witness_bonus: u32,
+    pub visual_bonus: i32,
+}
+
 impl IdentityEvidenceStore {
     pub fn record(
         &mut self,
@@ -52,5 +59,16 @@ impl IdentityEvidenceStore {
             persona_hint,
         });
         evidence_id
+    }
+}
+
+pub fn combat_consequence_modifiers(consequence: CombatConsequence) -> IdentityEvidenceModifiers {
+    let witness_bonus = (consequence.publicness as u32 / 20) + (consequence.notoriety as u32 / 30);
+    let visual_bonus =
+        (consequence.publicness as i32 / 3) + (consequence.notoriety as i32 / 4)
+            - (consequence.collateral as i32 / 10);
+    IdentityEvidenceModifiers {
+        witness_bonus,
+        visual_bonus,
     }
 }
