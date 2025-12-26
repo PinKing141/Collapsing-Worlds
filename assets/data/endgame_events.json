@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "endgame_exposed_hunt",
+      "phase": "EXPOSED",
+      "title": "The City Knows Your Name",
+      "text_stub": "Newsfeeds loop your face. Every patrol expects you. The city shifts its eyes toward the horizon where you stand.",
+      "choices": [
+        {
+          "id": "vanish",
+          "text": "Disappear into the seams and go quiet.",
+          "effects": ["pressure.identity +5", "flag.endgame_exposed_hunt"]
+        },
+        {
+          "id": "confront",
+          "text": "Confront the narrative head-on.",
+          "effects": ["pressure.moral +3", "pressure.institutional +4"]
+        }
+      ],
+      "effects": ["tag.endgame", "flag.endgame_exposed_scene"]
+    },
+    {
+      "id": "endgame_registration_edict",
+      "phase": "REGISTRATION",
+      "title": "The Registry Opens",
+      "text_stub": "Mandatory registration arrives with soft language and hard timetables. A line forms outside a cold, new office.",
+      "choices": [
+        {
+          "id": "comply",
+          "text": "Submit to the registry and control the narrative.",
+          "effects": ["pressure.institutional -2", "pressure.identity +4"]
+        },
+        {
+          "id": "resist",
+          "text": "Refuse and rally others to stay hidden.",
+          "effects": ["pressure.institutional +6", "pressure.moral +2"]
+        }
+      ],
+      "effects": ["tag.endgame", "flag.endgame_registration_scene"]
+    },
+    {
+      "id": "endgame_cosmic_signal",
+      "phase": "COSMIC_JUDGEMENT",
+      "title": "A Signal Beyond the Sky",
+      "text_stub": "Static spills through every channel. The stars answer with a tone that only you can hear.",
+      "choices": [
+        {
+          "id": "answer",
+          "text": "Send a response into the void.",
+          "effects": ["pressure.temporal +4", "pressure.psychological +3"]
+        },
+        {
+          "id": "shield",
+          "text": "Shield the city from whatever listens.",
+          "effects": ["pressure.resource +3", "pressure.moral +2"]
+        }
+      ],
+      "effects": ["tag.endgame", "flag.endgame_cosmic_scene"]
+    }
+  ]
+}
