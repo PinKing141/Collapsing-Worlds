@@ -35,7 +35,9 @@ pub fn is_punctuation_storylet(storylet: &Storylet) -> bool {
 }
 
 pub fn storylet_has_gate_requirements(storylet: &Storylet) -> bool {
-    !storylet.tags.is_empty() || storylet_has_thresholds(storylet)
+    !storylet.tags.is_empty()
+        || storylet_has_thresholds(storylet)
+        || storylet_has_state_gate(storylet)
 }
 
 pub fn storylet_has_thresholds(storylet: &Storylet) -> bool {
@@ -55,6 +57,13 @@ pub fn storylet_threshold_keys(storylet: &Storylet) -> Vec<String> {
 
 fn condition_has_threshold(condition: &str) -> bool {
     threshold_key(condition).is_some()
+}
+
+fn storylet_has_state_gate(storylet: &Storylet) -> bool {
+    storylet.preconditions.iter().any(|condition| {
+        let cond = condition.trim();
+        cond.starts_with("flag.") || cond.starts_with("endgame.state")
+    })
 }
 
 fn threshold_key(condition: &str) -> Option<String> {
