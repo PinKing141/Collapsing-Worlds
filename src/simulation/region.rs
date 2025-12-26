@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,8 @@ pub struct RegionState {
     pub countries: HashMap<CountryId, CountryProfile>,
     pub regions: HashMap<RegionId, RegionProfile>,
     pub global_pressure: GlobalPressure,
+    pub triggered_global_events: HashSet<String>,
+    pub last_global_escalation: GlobalEscalation,
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +75,7 @@ impl RegionEscalation {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GlobalEscalation {
     Stable,
     Tense,
@@ -99,6 +101,20 @@ pub struct GlobalPressure {
 }
 
 #[derive(Resource, Debug, Default)]
+pub struct GlobalEventLog(pub Vec<GlobalEvent>);
+
+#[derive(Debug, Clone)]
+pub struct GlobalEvent {
+    pub id: String,
+    pub title: String,
+    pub escalation: GlobalEscalation,
+    pub pressure: f32,
+    pub storylet_flag: String,
+    pub pressure_boost: f32,
+    pub nemesis_heat_bonus: i32,
+}
+
+#[derive(Resource, Debug, Default)]
 pub struct RegionEventLog(pub Vec<RegionEvent>);
 
 #[derive(Debug, Clone)]
@@ -111,7 +127,9 @@ pub struct RegionEvent {
 
 #[derive(Debug, Clone)]
 pub enum RegionEventKind {
-    CityHeatResponseChanged { response: crate::simulation::city::HeatResponse },
+    CityHeatResponseChanged {
+        response: crate::simulation::city::HeatResponse,
+    },
 }
 
 impl Default for RegionState {
@@ -166,6 +184,8 @@ impl Default for RegionState {
                 total: 0.0,
                 escalation: GlobalEscalation::Stable,
             },
+            triggered_global_events: HashSet::new(),
+            last_global_escalation: GlobalEscalation::Stable,
         }
     }
 }
@@ -211,18 +231,18 @@ impl RegionState {
             region_entry.crime_pressure_average,
         );
 
-        let country_entry = self
-            .countries
-            .entry(city.country_id)
-            .or_insert_with(|| CountryProfile {
-                id: city.country_id,
-                name: format!("Country {}", city.country_id.0),
-                continent_id: city.continent_id,
-                region_ids: vec![city.region_id],
-                heat_average: 0.0,
-                crime_pressure_average: 0.0,
-                escalation: RegionEscalation::Stable,
-            });
+        let country_entry =
+            self.countries
+                .entry(city.country_id)
+                .or_insert_with(|| CountryProfile {
+                    id: city.country_id,
+                    name: format!("Country {}", city.country_id.0),
+                    continent_id: city.continent_id,
+                    region_ids: vec![city.region_id],
+                    heat_average: 0.0,
+                    crime_pressure_average: 0.0,
+                    escalation: RegionEscalation::Stable,
+                });
         country_entry.continent_id = city.continent_id;
         if !country_entry.region_ids.contains(&city.region_id) {
             country_entry.region_ids.push(city.region_id);
@@ -247,17 +267,17 @@ impl RegionState {
             country_entry.crime_pressure_average,
         );
 
-        let continent_entry = self
-            .continents
-            .entry(city.continent_id)
-            .or_insert_with(|| ContinentProfile {
-                id: city.continent_id,
-                name: format!("Continent {}", city.continent_id.0),
-                country_ids: vec![city.country_id],
-                heat_average: 0.0,
-                crime_pressure_average: 0.0,
-                escalation: RegionEscalation::Stable,
-            });
+        let continent_entry =
+            self.continents
+                .entry(city.continent_id)
+                .or_insert_with(|| ContinentProfile {
+                    id: city.continent_id,
+                    name: format!("Continent {}", city.continent_id.0),
+                    country_ids: vec![city.country_id],
+                    heat_average: 0.0,
+                    crime_pressure_average: 0.0,
+                    escalation: RegionEscalation::Stable,
+                });
         if !continent_entry.country_ids.contains(&city.country_id) {
             continent_entry.country_ids.push(city.country_id);
         }
@@ -293,6 +313,36 @@ impl RegionState {
         let escalation = global_escalation_for(total);
         self.global_pressure = GlobalPressure { total, escalation };
     }
+
+    pub fn evaluate_global_events(
+        &mut self,
+        catalog: &[crate::data::global_events::GlobalEventDefinition],
+        log: &mut GlobalEventLog,
+    ) {
+        log.0.clear();
+        for event in catalog {
+            if self.global_pressure.total < event.min_pressure {
+                continue;
+            }
+            if self.global_pressure.escalation.rank() < event.min_escalation.rank() {
+                continue;
+            }
+            if self.triggered_global_events.contains(&event.id) {
+                continue;
+            }
+            self.triggered_global_events.insert(event.id.clone());
+            log.0.push(GlobalEvent {
+                id: event.id.clone(),
+                title: event.title.clone(),
+                escalation: self.global_pressure.escalation,
+                pressure: self.global_pressure.total,
+                storylet_flag: event.storylet_flag.clone(),
+                pressure_boost: event.pressure_boost,
+                nemesis_heat_bonus: event.nemesis_heat_bonus,
+            });
+        }
+        self.last_global_escalation = self.global_pressure.escalation;
+    }
 }
 
 pub fn region_escalation_for(heat_average: f32, crime_pressure_average: f32) -> RegionEscalation {
@@ -317,10 +367,7 @@ pub fn global_escalation_for(global_pressure: f32) -> GlobalEscalation {
     }
 }
 
-pub fn propagate_city_event(
-    event: CityEvent,
-    region_id: RegionId,
-) -> RegionEvent {
+pub fn propagate_city_event(event: CityEvent, region_id: RegionId) -> RegionEvent {
     let kind = match event.kind {
         CityEventKind::HeatResponseChanged { response } => {
             RegionEventKind::CityHeatResponseChanged { response }

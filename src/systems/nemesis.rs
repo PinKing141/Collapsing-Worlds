@@ -9,8 +9,11 @@ use crate::simulation::case::{CaseRegistry, CaseStatus, CaseTargetType};
 use crate::simulation::city::{CityState, LocationId};
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::IdentityEvidenceStore;
-use crate::simulation::nemesis::{NemesisCandidate, NemesisMemory, NemesisPersonaArc, NemesisState};
+use crate::simulation::nemesis::{
+    NemesisCandidate, NemesisMemory, NemesisPersonaArc, NemesisState,
+};
 use crate::simulation::pressure::PressureState;
+use crate::simulation::region::{GlobalEscalation, RegionState};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
 
@@ -26,7 +29,9 @@ pub struct NemesisDirector {
 
 impl Default for NemesisDirector {
     fn default() -> Self {
-        Self { actions: Vec::new() }
+        Self {
+            actions: Vec::new(),
+        }
     }
 }
 
@@ -43,6 +48,7 @@ pub fn nemesis_system(
     director: Res<NemesisDirector>,
     mut state: ResMut<NemesisState>,
     city: Res<CityState>,
+    region: Res<RegionState>,
     mut cases: ResMut<CaseRegistry>,
     mut evidence: ResMut<WorldEvidence>,
     identity_evidence: Res<IdentityEvidenceStore>,
@@ -55,6 +61,7 @@ pub fn nemesis_system(
         &director,
         &mut state,
         &city,
+        &region,
         &mut cases,
         &mut evidence,
         &identity_evidence,
@@ -69,6 +76,7 @@ pub fn run_nemesis_system(
     director: &NemesisDirector,
     state: &mut NemesisState,
     city: &CityState,
+    region: &RegionState,
     cases: &mut CaseRegistry,
     evidence: &mut WorldEvidence,
     identity_evidence: &IdentityEvidenceStore,
@@ -104,13 +112,10 @@ pub fn run_nemesis_system(
             .get(&snapshot.location_id)
             .map(|loc| loc.heat)
             .unwrap_or(0);
-        match state
-            .candidates
-            .iter_mut()
-            .find(|candidate| {
-                candidate.faction_id == snapshot.faction_id
-                    && candidate.location_id == snapshot.location_id
-            }) {
+        match state.candidates.iter_mut().find(|candidate| {
+            candidate.faction_id == snapshot.faction_id
+                && candidate.location_id == snapshot.location_id
+        }) {
             Some(candidate) => {
                 candidate.heat = heat;
                 candidate.case_progress = snapshot.progress;
@@ -137,6 +142,8 @@ pub fn run_nemesis_system(
 
     let mut actions_to_apply: Vec<NemesisActionTrigger> = Vec::new();
 
+    let escalation_mods = nemesis_escalation_modifiers(region.global_pressure.escalation);
+
     for candidate in state.candidates.iter_mut() {
         let Some(snapshot) = case_snapshots.iter().find(|case| {
             case.faction_id == candidate.faction_id && case.location_id == candidate.location_id
@@ -146,8 +153,11 @@ pub fn run_nemesis_system(
 
         let mut highest_level = candidate.adaptation_level;
         for threshold in state.thresholds.iter() {
-            if candidate.heat >= threshold.min_heat
-                && candidate.case_progress >= threshold.min_case_progress
+            let min_heat = (threshold.min_heat as i32 + escalation_mods.heat_delta).max(0) as i32;
+            let min_progress =
+                (threshold.min_case_progress as i32 + escalation_mods.case_delta).max(0) as u32;
+            if candidate.heat >= min_heat
+                && candidate.case_progress >= min_progress
                 && threshold.level > highest_level
             {
                 highest_level = threshold.level;
@@ -174,13 +184,14 @@ pub fn run_nemesis_system(
             ));
         }
 
-        let cooldown = state
+        let base_cooldown = state
             .thresholds
             .iter()
             .filter(|threshold| threshold.level <= candidate.adaptation_level)
             .max_by_key(|threshold| threshold.level)
             .map(|threshold| threshold.cooldown)
             .unwrap_or(3);
+        let cooldown = apply_cooldown_modifier(base_cooldown, escalation_mods.cooldown_delta);
 
         if !candidate.is_nemesis {
             continue;
@@ -191,12 +202,9 @@ pub fn run_nemesis_system(
         }
 
         let focus = build_counter_focus(candidate);
-        let Some(action) = select_action(
-            director,
-            candidate.heat,
-            snapshot.progress,
-            focus.as_ref(),
-        ) else {
+        let Some(action) =
+            select_action(director, candidate.heat, snapshot.progress, focus.as_ref())
+        else {
             continue;
         };
 
@@ -214,13 +222,7 @@ pub fn run_nemesis_system(
     }
 
     for trigger in actions_to_apply {
-        apply_action(
-            &trigger,
-            cases,
-            evidence,
-            pressure,
-            log,
-        );
+        apply_action(&trigger, cases, evidence, pressure, log);
     }
 }
 
@@ -276,7 +278,9 @@ fn select_action(
     let mut candidates: Vec<&NemesisActionDefinition> = director
         .actions
         .iter()
-        .filter(|action| action.min_heat as i32 <= heat && action.min_case_progress <= case_progress)
+        .filter(|action| {
+            action.min_heat as i32 <= heat && action.min_case_progress <= case_progress
+        })
         .collect();
     if let Some(focus) = focus {
         let focused: Vec<&NemesisActionDefinition> = candidates
@@ -299,7 +303,11 @@ fn action_matches_focus(action: &NemesisActionDefinition, focus: &NemesisCounter
         }
     }
     if let Some(form) = &focus.form {
-        if action.form_focus.iter().any(|focus_form| focus_form == form) {
+        if action
+            .form_focus
+            .iter()
+            .any(|focus_form| focus_form == form)
+        {
             return true;
         }
     }
@@ -382,6 +390,46 @@ fn emit_confrontation_storylet(
     ));
 }
 
+#[derive(Debug, Clone, Copy)]
+struct NemesisEscalationModifiers {
+    heat_delta: i32,
+    case_delta: i32,
+    cooldown_delta: i64,
+}
+
+fn nemesis_escalation_modifiers(escalation: GlobalEscalation) -> NemesisEscalationModifiers {
+    match escalation {
+        GlobalEscalation::Stable => NemesisEscalationModifiers {
+            heat_delta: 0,
+            case_delta: 0,
+            cooldown_delta: 0,
+        },
+        GlobalEscalation::Tense => NemesisEscalationModifiers {
+            heat_delta: -4,
+            case_delta: -3,
+            cooldown_delta: -1,
+        },
+        GlobalEscalation::Crisis => NemesisEscalationModifiers {
+            heat_delta: -8,
+            case_delta: -6,
+            cooldown_delta: -1,
+        },
+        GlobalEscalation::Cosmic => NemesisEscalationModifiers {
+            heat_delta: -12,
+            case_delta: -10,
+            cooldown_delta: -2,
+        },
+    }
+}
+
+fn apply_cooldown_modifier(base: u64, delta: i64) -> u64 {
+    if delta >= 0 {
+        base.saturating_add(delta as u64)
+    } else {
+        base.saturating_sub(delta.unsigned_abs())
+    }
+}
+
 fn apply_action(
     trigger: &NemesisActionTrigger,
     cases: &mut CaseRegistry,
@@ -396,8 +444,8 @@ fn apply_action(
 
     if trigger.action.case_progress_delta != 0 {
         if let Some(case) = cases.find_case_mut(&trigger.faction_id, trigger.location_id) {
-            let next = (case.progress as i32 + trigger.action.case_progress_delta)
-                .clamp(0, 100) as u32;
+            let next =
+                (case.progress as i32 + trigger.action.case_progress_delta).clamp(0, 100) as u32;
             case.progress = next;
             case.pressure_actions.push(trigger.action.id.clone());
         }

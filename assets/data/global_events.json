@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "global_tension_breach",
+      "title": "Tension Breach",
+      "min_escalation": "Tense",
+      "min_pressure": 40.0,
+      "storylet_flag": "global_tension_breach",
+      "summary": "The world notices the undercurrent. Institutions posture for crisis.",
+      "pressure_boost": 4.0,
+      "nemesis_heat_bonus": 2
+    },
+    {
+      "id": "global_crisis_protocols",
+      "title": "Crisis Protocols",
+      "min_escalation": "Crisis",
+      "min_pressure": 60.0,
+      "storylet_flag": "global_crisis_protocols",
+      "summary": "Emergency measures activate across national borders.",
+      "pressure_boost": 7.0,
+      "nemesis_heat_bonus": 4
+    },
+    {
+      "id": "global_cosmic_alert",
+      "title": "Cosmic Alert",
+      "min_escalation": "Cosmic",
+      "min_pressure": 80.0,
+      "storylet_flag": "global_cosmic_alert",
+      "summary": "The sky changes. The planet prepares for the impossible.",
+      "pressure_boost": 10.0,
+      "nemesis_heat_bonus": 6
+    }
+  ]
+}
