@@ -180,12 +180,12 @@ const CAREER_XP_CAP: i32 = 250;
 const PROMOTION_COOLDOWN_DAYS: u32 = 5;
 const MAX_JOB_LEVEL: i32 = 6;
 const PART_TIME_LEVEL_CAP: i32 = 4;
-const INCOME_BOOST_CR: i64 = 10;
+const INCOME_BOOST_CR: i64 = 25;
 
 impl Default for CivilianState {
     fn default() -> Self {
         let cash = 120;
-        let wage = 45;
+        let wage = career_wage(JobRole::Journalist, 1, JobStatus::Employed);
         let mut wealth = Wealth::new(cash as i64);
         wealth.income_per_tick = wage as i64;
         wealth.upkeep_per_tick = lifestyle_upkeep(wealth.tier);
@@ -928,63 +928,63 @@ struct CareerModel {
 fn career_model(role: JobRole) -> CareerModel {
     match role {
         JobRole::Lawyer => CareerModel {
-            base_wage: 70,
-            wage_step: 12,
+            base_wage: 180,
+            wage_step: 70,
             reputation_step: 4,
         },
         JobRole::Journalist => CareerModel {
-            base_wage: 45,
-            wage_step: 7,
+            base_wage: 70,
+            wage_step: 22,
             reputation_step: 3,
         },
         JobRole::Chef => CareerModel {
-            base_wage: 35,
-            wage_step: 5,
+            base_wage: 50,
+            wage_step: 15,
             reputation_step: 2,
         },
         JobRole::Photographer => CareerModel {
-            base_wage: 40,
-            wage_step: 6,
+            base_wage: 60,
+            wage_step: 18,
             reputation_step: 2,
         },
         JobRole::Scientist => CareerModel {
-            base_wage: 60,
-            wage_step: 10,
+            base_wage: 160,
+            wage_step: 60,
             reputation_step: 4,
         },
         JobRole::Artist => CareerModel {
-            base_wage: 30,
-            wage_step: 5,
+            base_wage: 45,
+            wage_step: 14,
             reputation_step: 3,
         },
         JobRole::Engineer => CareerModel {
-            base_wage: 55,
-            wage_step: 9,
+            base_wage: 140,
+            wage_step: 55,
             reputation_step: 3,
         },
         JobRole::Nurse => CareerModel {
-            base_wage: 42,
-            wage_step: 6,
+            base_wage: 80,
+            wage_step: 24,
             reputation_step: 3,
         },
         JobRole::Teacher => CareerModel {
-            base_wage: 38,
-            wage_step: 5,
+            base_wage: 75,
+            wage_step: 22,
             reputation_step: 3,
         },
         JobRole::Mechanic => CareerModel {
-            base_wage: 37,
-            wage_step: 5,
+            base_wage: 65,
+            wage_step: 20,
             reputation_step: 2,
         },
         JobRole::Analyst => CareerModel {
-            base_wage: 50,
-            wage_step: 8,
+            base_wage: 120,
+            wage_step: 45,
             reputation_step: 3,
         },
         JobRole::Contractor => CareerModel {
-            base_wage: 45,
-            wage_step: 6,
+            base_wage: 110,
+            wage_step: 40,
             reputation_step: 2,
         },
     }

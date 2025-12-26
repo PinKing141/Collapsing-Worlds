@@ -75,7 +75,7 @@ impl Wealth {
             tier,
             income_per_tick: 0,
             upkeep_per_tick: 0,
-            liquidity: 0.6,
+            liquidity: default_liquidity_for_tier(tier),
         }
     }
 
@@ -86,6 +86,10 @@ impl Wealth {
     pub fn refresh_tier(&mut self, debt_cr: i64) -> WealthTier {
         let net = self.net_worth(debt_cr);
         self.tier = wealth_tier_for(net);
+        let default_liquidity = default_liquidity_for_tier(self.tier);
+        if self.liquidity > default_liquidity {
+            self.liquidity = default_liquidity;
+        }
         self.tier
     }
 
@@ -142,14 +146,28 @@ pub fn wealth_tier_for(net_worth_cr: i64) -> WealthTier {
 pub fn lifestyle_upkeep(tier: WealthTier) -> i64 {
     match tier {
         WealthTier::Destitute => 0,
-        WealthTier::Poor => 5,
-        WealthTier::Working => 20,
-        WealthTier::Middle => 80,
-        WealthTier::Affluent => 250,
-        WealthTier::Wealthy => 1_000,
-        WealthTier::UltraWealthy => 4_000,
+        WealthTier::Poor => 10,
+        WealthTier::Working => 40,
+        WealthTier::Middle => 150,
+        WealthTier::Affluent => 600,
+        WealthTier::Wealthy => 2_000,
+        WealthTier::UltraWealthy => 5_000,
         WealthTier::Elite => 10_000,
         WealthTier::Titan => 25_000,
+    }
+}
+
+pub fn default_liquidity_for_tier(tier: WealthTier) -> f32 {
+    match tier {
+        WealthTier::Destitute => 0.9,
+        WealthTier::Poor => 0.85,
+        WealthTier::Working => 0.8,
+        WealthTier::Middle => 0.7,
+        WealthTier::Affluent => 0.6,
+        WealthTier::Wealthy => 0.5,
+        WealthTier::UltraWealthy => 0.4,
+        WealthTier::Elite => 0.3,
+        WealthTier::Titan => 0.2,
     }
 }
 
