@@ -46,6 +46,21 @@ pub enum JobRole {
     Mechanic,
     Analyst,
     Contractor,
+    Doctor,
+    Firefighter,
+    PoliceOfficer,
+    Electrician,
+    SoftwareDeveloper,
+    Accountant,
+    Pharmacist,
+    SocialWorker,
+    Architect,
+    Pilot,
+    Dentist,
+    Paramedic,
+    Plumber,
+    RetailManager,
+    Farmer,
 }
 
 #[derive(Debug, Clone)]
@@ -987,6 +1002,81 @@ fn career_model(role: JobRole) -> CareerModel {
             wage_step: 40,
             reputation_step: 2,
         },
+        JobRole::Doctor => CareerModel {
+            base_wage: 200,
+            wage_step: 75,
+            reputation_step: 4,
+        },
+        JobRole::Firefighter => CareerModel {
+            base_wage: 85,
+            wage_step: 26,
+            reputation_step: 3,
+        },
+        JobRole::PoliceOfficer => CareerModel {
+            base_wage: 90,
+            wage_step: 28,
+            reputation_step: 3,
+        },
+        JobRole::Electrician => CareerModel {
+            base_wage: 95,
+            wage_step: 30,
+            reputation_step: 2,
+        },
+        JobRole::SoftwareDeveloper => CareerModel {
+            base_wage: 150,
+            wage_step: 55,
+            reputation_step: 3,
+        },
+        JobRole::Accountant => CareerModel {
+            base_wage: 115,
+            wage_step: 38,
+            reputation_step: 3,
+        },
+        JobRole::Pharmacist => CareerModel {
+            base_wage: 140,
+            wage_step: 45,
+            reputation_step: 3,
+        },
+        JobRole::SocialWorker => CareerModel {
+            base_wage: 70,
+            wage_step: 22,
+            reputation_step: 3,
+        },
+        JobRole::Architect => CareerModel {
+            base_wage: 135,
+            wage_step: 50,
+            reputation_step: 3,
+        },
+        JobRole::Pilot => CareerModel {
+            base_wage: 170,
+            wage_step: 65,
+            reputation_step: 4,
+        },
+        JobRole::Dentist => CareerModel {
+            base_wage: 160,
+            wage_step: 55,
+            reputation_step: 4,
+        },
+        JobRole::Paramedic => CareerModel {
+            base_wage: 80,
+            wage_step: 24,
+            reputation_step: 3,
+        },
+        JobRole::Plumber => CareerModel {
+            base_wage: 85,
+            wage_step: 26,
+            reputation_step: 2,
+        },
+        JobRole::RetailManager => CareerModel {
+            base_wage: 75,
+            wage_step: 24,
+            reputation_step: 2,
+        },
+        JobRole::Farmer => CareerModel {
+            base_wage: 60,
+            wage_step: 20,
+            reputation_step: 2,
+        },
     }
 }
 
@@ -1076,6 +1166,21 @@ fn parse_job_role(value: &str) -> Option<JobRole> {
         "mechanic" => Some(JobRole::Mechanic),
         "analyst" => Some(JobRole::Analyst),
         "contractor" => Some(JobRole::Contractor),
+        "doctor" => Some(JobRole::Doctor),
+        "firefighter" => Some(JobRole::Firefighter),
+        "police_officer" => Some(JobRole::PoliceOfficer),
+        "electrician" => Some(JobRole::Electrician),
+        "software_developer" => Some(JobRole::SoftwareDeveloper),
+        "accountant" => Some(JobRole::Accountant),
+        "pharmacist" => Some(JobRole::Pharmacist),
+        "social_worker" => Some(JobRole::SocialWorker),
+        "architect" => Some(JobRole::Architect),
+        "pilot" => Some(JobRole::Pilot),
+        "dentist" => Some(JobRole::Dentist),
+        "paramedic" => Some(JobRole::Paramedic),
+        "plumber" => Some(JobRole::Plumber),
+        "retail_manager" => Some(JobRole::RetailManager),
+        "farmer" => Some(JobRole::Farmer),
         _ => None,
     }
 }
@@ -1107,10 +1212,27 @@ fn default_contact_domain(role: JobRole) -> ContactDomain {
         | JobRole::Scientist
         | JobRole::Engineer
         | JobRole::Analyst
-        | JobRole::Contractor => ContactDomain::Professional,
+        | JobRole::Contractor
+        | JobRole::Doctor
+        | JobRole::Electrician
+        | JobRole::SoftwareDeveloper
+        | JobRole::Accountant
+        | JobRole::Pharmacist
+        | JobRole::Architect
+        | JobRole::Dentist
+        | JobRole::Pilot => ContactDomain::Professional,
         JobRole::Journalist | JobRole::Photographer => ContactDomain::Media,
-        JobRole::Artist => ContactDomain::Community,
-        JobRole::Chef | JobRole::Nurse | JobRole::Teacher | JobRole::Mechanic => {
+        JobRole::Artist | JobRole::Farmer => ContactDomain::Community,
+        JobRole::Chef
+        | JobRole::Nurse
+        | JobRole::Teacher
+        | JobRole::Mechanic
+        | JobRole::Firefighter
+        | JobRole::PoliceOfficer
+        | JobRole::SocialWorker
+        | JobRole::Paramedic
+        | JobRole::Plumber
+        | JobRole::RetailManager => {
             ContactDomain::Community
         }
     }
