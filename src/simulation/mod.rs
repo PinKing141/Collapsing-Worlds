@@ -15,3 +15,4 @@ pub mod origin;
 pub mod civilian;
 pub mod nemesis;
 pub mod endgame;
+pub mod economy;

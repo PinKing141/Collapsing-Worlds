@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "global_tense_signals",
+      "title": "Signal Noise",
+      "text_stub": "Telemetry stations report rising anomaly noise. Analysts disagree on whether it is a false alarm or the start of a pattern.",
+      "min_escalation": "TENSE",
+      "max_escalation": "CRISIS",
+      "cooldown_days": 2,
+      "tags": ["OMEN"],
+      "effects": ["storylet.flag:global_signal_noise"],
+      "choices": [
+        {
+          "id": "investigate",
+          "text": "Fund a quiet investigation and keep it out of the media cycle.",
+          "effects": ["pressure.resource:+2", "pressure.identity:-2", "nemesis.threat:+1"]
+        },
+        {
+          "id": "public",
+          "text": "Brief the press to build transparency and public trust.",
+          "effects": ["pressure.moral:-1", "pressure.identity:+2", "storylet.flag:global_public_briefing"]
+        }
+      ]
+    },
+    {
+      "id": "global_crisis_ripple",
+      "title": "Crisis Ripple",
+      "text_stub": "A chain of coordinated incidents stretches response teams across multiple regions.",
+      "min_escalation": "CRISIS",
+      "cooldown_days": 3,
+      "tags": ["CRISIS", "COORDINATED"],
+      "effects": ["storylet.flag:global_crisis_ripple"],
+      "choices": [
+        {
+          "id": "deploy",
+          "text": "Deploy emergency assets to stabilize the situation.",
+          "effects": ["pressure.resource:+3", "pressure.temporal:+2", "nemesis.threat:+2"]
+        },
+        {
+          "id": "delegate",
+          "text": "Delegate to allied factions and focus on intelligence.",
+          "effects": ["pressure.institutional:+1", "pressure.identity:-2", "storylet.flag:global_intel_focus"]
+        }
+      ]
+    },
+    {
+      "id": "global_cosmic_breach",
+      "title": "Cosmic Breach",
+      "text_stub": "A breach opens beyond the atmosphere, warping physics in the upper sky.",
+      "min_escalation": "COSMIC",
+      "cooldown_days": 4,
+      "tags": ["COSMIC"],
+      "effects": ["storylet.flag:global_cosmic_breach", "pressure.psychological:+4"],
+      "choices": [
+        {
+          "id": "seal",
+          "text": "Commit resources to sealing the breach immediately.",
+          "effects": ["pressure.resource:+4", "pressure.temporal:+2", "nemesis.threat:+3"]
+        },
+        {
+          "id": "study",
+          "text": "Stabilize the perimeter and study the breach.",
+          "effects": ["pressure.psychological:+2", "pressure.identity:+2", "storylet.flag:global_breach_study"]
+        }
+      ]
+    }
+  ]
+}

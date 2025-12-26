@@ -9,12 +9,12 @@
         {
           "id": "work",
           "text": "Go in and power through the shift.",
-          "effects": ["cash:+45", "support:-2", "strain:+3"]
+          "effects": ["support:-2", "strain:+3", "career_xp:+5"]
         },
         {
           "id": "skip",
           "text": "Skip work to handle other responsibilities.",
-          "effects": ["cash:-15", "strain:+4", "job:part_time"]
+          "effects": ["strain:+4", "job:part_time"]
         }
       ]
     },
@@ -66,7 +66,8 @@
             "job_level:+1",
             "wage:+10",
             "career:+6",
-            "strain:+4"
+            "strain:+4",
+            "career_xp:+8"
           ]
         },
         {
@@ -84,7 +85,7 @@
         {
           "id": "push",
           "text": "Lean in and carry the workload.",
-          "effects": ["cash:+20", "job_stability:+6", "career:+4", "strain:+6"]
+          "effects": ["cash:+20", "job_stability:+6", "career:+4", "strain:+6", "career_xp:+4"]
         },
         {
           "id": "set_limits",
@@ -105,9 +106,11 @@
             "income_boost:+8",
             "cash:+15",
             "career:+3",
-            "contact:Rowan:acquaintance",
+            "contact:Rowan:acquaintance:professional",
             "relationship:Rowan:+5",
-            "strain:+3"
+            "strain:+3",
+            "origin.event:CONTACT",
+            "career_xp:+2"
           ]
         },
         {
@@ -126,11 +129,12 @@
           "id": "show",
           "text": "Offer help and keep it discreet.",
           "effects": [
-            "contact:Casey:friend",
+            "contact:Casey:friend:community",
             "relationship:Casey:+8",
             "support:+4",
             "obligation:+4",
-            "media:+2"
+            "media:+2",
+            "origin.event:LEAD"
           ]
         },
         {
@@ -149,10 +153,11 @@
           "id": "confide",
           "text": "Share more than usual.",
           "effects": [
-            "contact:Marisol:confidant",
+            "contact:Marisol:confidant:media",
             "relationship:Marisol:+10",
             "support:+5",
-            "media:+3"
+            "media:+3",
+            "origin.discover:mentor_network"
           ]
         },
         {
@@ -205,10 +210,11 @@
           "id": "accept",
           "text": "Accept the offer and set ground rules.",
           "effects": [
-            "contact:Nyx:ally",
+            "contact:Nyx:ally:underground",
             "relationship:Nyx:+6",
             "safehouse:+10",
-            "obligation:+3"
+            "obligation:+3",
+            "origin.event:ACQUIRE"
           ]
         },
         {

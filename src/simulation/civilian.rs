@@ -1,5 +1,6 @@
 use bevy_ecs::prelude::*;
 
+use crate::simulation::economy::{clamp_liquidity, lifestyle_upkeep, EconomyTickResult, Wealth};
 use crate::simulation::time::GameTime;
 
 #[derive(Resource, Debug, Clone)]
@@ -7,14 +8,21 @@ pub struct CivilianState {
     pub job_status: JobStatus,
     pub job: CivilianJob,
     pub finances: CivilianFinances,
+    pub wealth: Wealth,
     pub social: SocialTies,
     pub reputation: ReputationTrack,
     pub rewards: CivilianRewards,
+    pub network_rewards: CivilianRewards,
+    pub social_web: SocialWeb,
+    pub civilian_tier: CivilianTier,
+    pub career_xp: i32,
+    pub last_promotion_day: u32,
     pub contacts: Vec<Contact>,
     pub pending_events: Vec<CivilianEvent>,
     pub last_day: u32,
     pub last_work_day: u32,
     pub last_relationship_day: u32,
+    pub last_economy_day: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,11 +79,69 @@ pub struct ReputationTrack {
     pub media: i32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CivilianRewards {
     pub income_boost: i32,
     pub safehouse: i32,
     pub access: i32,
+    pub intel: i32,
+    pub favors: i32,
+}
+
+impl CivilianRewards {
+    pub fn combined(&self, other: &CivilianRewards) -> CivilianRewards {
+        CivilianRewards {
+            income_boost: clamp_metric(self.income_boost + other.income_boost),
+            safehouse: clamp_metric(self.safehouse + other.safehouse),
+            access: clamp_metric(self.access + other.access),
+            intel: clamp_metric(self.intel + other.intel),
+            favors: clamp_metric(self.favors + other.favors),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.income_boost == 0
+            && self.safehouse == 0
+            && self.access == 0
+            && self.intel == 0
+            && self.favors == 0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContactDomain {
+    Professional,
+    Community,
+    Media,
+    Underground,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SocialWeb {
+    pub professional: i32,
+    pub community: i32,
+    pub media: i32,
+    pub underground: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CivilianTier {
+    Local,
+    Connected,
+    Influential,
+    PowerBroker,
+}
+
+impl Default for CivilianTier {
+    fn default() -> Self {
+        CivilianTier::Local
+    }
+}
+
+impl Default for ContactDomain {
+    fn default() -> Self {
+        ContactDomain::Community
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +157,7 @@ pub enum RelationshipLevel {
 pub struct Contact {
     pub name: String,
     pub level: RelationshipLevel,
+    pub domain: ContactDomain,
     pub bond: i32,
     pub influence: i32,
 }
@@ -109,8 +176,20 @@ pub struct CivilianPressure {
     pub identity: f32,
 }
 
+const CAREER_XP_CAP: i32 = 250;
+const PROMOTION_COOLDOWN_DAYS: u32 = 5;
+const MAX_JOB_LEVEL: i32 = 6;
+const PART_TIME_LEVEL_CAP: i32 = 4;
+const INCOME_BOOST_CR: i64 = 10;
+
 impl Default for CivilianState {
     fn default() -> Self {
+        let cash = 120;
+        let wage = 45;
+        let mut wealth = Wealth::new(cash as i64);
+        wealth.income_per_tick = wage as i64;
+        wealth.upkeep_per_tick = lifestyle_upkeep(wealth.tier);
+        wealth.liquidity = clamp_liquidity(wealth.liquidity);
         Self {
             job_status: JobStatus::Employed,
             job: CivilianJob {
@@ -120,12 +199,13 @@ impl Default for CivilianState {
                 stability: 48,
             },
             finances: CivilianFinances {
-                cash: 120,
+                cash,
                 debt: 0,
                 rent: 80,
                 rent_due_in: 5,
-                wage: 45,
+                wage,
             },
+            wealth,
             social: SocialTies {
                 support: 55,
                 strain: 10,
@@ -136,22 +216,40 @@ impl Default for CivilianState {
                 community: 38,
                 media: 25,
             },
-            rewards: CivilianRewards {
-                income_boost: 0,
-                safehouse: 0,
-                access: 0,
-            },
+            rewards: CivilianRewards::default(),
+            network_rewards: CivilianRewards::default(),
+            social_web: SocialWeb::default(),
+            civilian_tier: CivilianTier::default(),
+            career_xp: 0,
+            last_promotion_day: 0,
             contacts: Vec::new(),
             pending_events: Vec::new(),
             last_day: 0,
             last_work_day: 0,
             last_relationship_day: 0,
+            last_economy_day: 0,
         }
     }
 }
 
 impl CivilianState {
+    pub fn effective_rewards(&self) -> CivilianRewards {
+        self.rewards.combined(&self.network_rewards)
+    }
+
+    pub fn net_worth_cr(&self) -> i64 {
+        self.wealth.net_worth(self.finances.debt as i64)
+    }
+
+    pub fn career_progress(&self) -> (i32, i32) {
+        if matches!(self.job_status, JobStatus::Unemployed) {
+            return (0, 0);
+        }
+        (self.career_xp, promotion_threshold(self.job.level))
+    }
+
     pub fn pressure_targets(&self) -> CivilianPressure {
+        let rewards = self.effective_rewards();
         let base_time = match self.job_status {
             JobStatus::Employed => 18.0,
             JobStatus::PartTime => 10.0,
@@ -168,8 +266,11 @@ impl CivilianState {
 
         let mut temporal = (base_time + rent_urgency + self.social.obligation as f32 * 0.6)
             .clamp(0.0, 100.0);
-        if self.rewards.access > 0 {
-            temporal -= self.rewards.access as f32 * 0.4;
+        if rewards.access > 0 {
+            temporal -= rewards.access as f32 * 0.4;
+        }
+        if rewards.intel > 0 {
+            temporal -= rewards.intel as f32 * 0.3;
         }
         temporal = temporal.clamp(0.0, 100.0);
 
@@ -180,8 +281,11 @@ impl CivilianState {
         if self.finances.rent_due_in <= 2 {
             resource += 12.0;
         }
-        if self.rewards.income_boost > 0 {
-            resource -= self.rewards.income_boost as f32 * 0.6;
+        if rewards.income_boost > 0 {
+            resource -= rewards.income_boost as f32 * 0.6;
+        }
+        if rewards.favors > 0 {
+            resource -= rewards.favors as f32 * 0.5;
         }
         resource = resource.clamp(0.0, 100.0);
 
@@ -196,11 +300,11 @@ impl CivilianState {
 
         let mut identity = (self.reputation.media as f32 * 0.7).clamp(0.0, 70.0);
         identity += (self.contacts.len() as f32 * 2.0).clamp(0.0, 20.0);
-        if self.rewards.safehouse > 0 {
-            identity -= self.rewards.safehouse as f32 * 6.0;
+        if rewards.safehouse > 0 {
+            identity -= rewards.safehouse as f32 * 6.0;
         }
-        if self.rewards.access > 0 {
-            identity -= self.rewards.access as f32 * 2.5;
+        if rewards.access > 0 {
+            identity -= rewards.access as f32 * 2.5;
         }
         identity = identity.clamp(0.0, 100.0);
 
@@ -220,6 +324,9 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
         if state.finances.rent_due_in <= 0 {
             queue_event(state, "civilian_rent_due", time.tick);
         }
+        update_social_web(state);
+        update_civilian_tier(state);
+        update_network_rewards(state);
     }
 
     if matches!(state.job_status, JobStatus::Employed | JobStatus::PartTime)
@@ -228,6 +335,8 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
     {
         state.last_work_day = time.day;
         queue_event(state, "civilian_work_shift", time.tick);
+        record_work_shift(state);
+        apply_career_progression(state, time.day);
     }
 
     if time.hour == 19 && state.last_relationship_day != time.day {
@@ -238,8 +347,28 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
     }
 }
 
+pub fn tick_civilian_economy(
+    state: &mut CivilianState,
+    time: &GameTime,
+) -> Option<EconomyTickResult> {
+    if time.day == state.last_economy_day {
+        return None;
+    }
+    state.last_economy_day = time.day;
+    refresh_wealth_tier(state);
+    update_wealth_profile(state);
+    let result = state.wealth.apply_tick(state.finances.debt as i64);
+    sync_finances_from_wealth(state);
+    Some(result)
+}
+
 pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> Vec<String> {
     let mut applied = Vec::new();
+    let mut career_changed = false;
+    let mut wage_override = false;
+    let mut cash_changed = false;
+    let mut debt_changed = false;
+    let mut wealth_changed = false;
     for effect in effects {
         let parts: Vec<&str> = effect.split(':').collect();
         if parts.is_empty() {
@@ -247,15 +376,42 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
         }
         let key = parts[0].trim();
         match key {
-            "cash" => apply_delta_at(&mut state.finances.cash, parts.get(1), &mut applied, "cash"),
-            "debt" => apply_delta_at(&mut state.finances.debt, parts.get(1), &mut applied, "debt"),
+            "cash" => {
+                apply_delta_at(&mut state.finances.cash, parts.get(1), &mut applied, "cash");
+                cash_changed = true;
+            }
+            "debt" => {
+                apply_delta_at(&mut state.finances.debt, parts.get(1), &mut applied, "debt");
+                debt_changed = true;
+            }
             "rent_due_in" => apply_delta_at(
                 &mut state.finances.rent_due_in,
                 parts.get(1),
                 &mut applied,
                 "rent_due_in",
             ),
-            "wage" => apply_delta_at(&mut state.finances.wage, parts.get(1), &mut applied, "wage"),
+            "wage" => {
+                wage_override = true;
+                apply_delta_at(&mut state.finances.wage, parts.get(1), &mut applied, "wage");
+            }
+            "wealth" | "cr" => {
+                apply_delta_at_i64(
+                    &mut state.wealth.current_cr,
+                    parts.get(1),
+                    &mut applied,
+                    "wealth",
+                );
+                wealth_changed = true;
+            }
+            "liquidity" => {
+                apply_delta_at_f32(
+                    &mut state.wealth.liquidity,
+                    parts.get(1),
+                    &mut applied,
+                    "liquidity",
+                );
+                state.wealth.liquidity = clamp_liquidity(state.wealth.liquidity);
+            }
             "support" => {
                 apply_delta_at(&mut state.social.support, parts.get(1), &mut applied, "support");
                 state.social.support = clamp_metric(state.social.support);
@@ -327,16 +483,36 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                 );
                 state.rewards.access = clamp_metric(state.rewards.access);
             }
+            "intel" => {
+                apply_delta_at(
+                    &mut state.rewards.intel,
+                    parts.get(1),
+                    &mut applied,
+                    "intel",
+                );
+                state.rewards.intel = clamp_metric(state.rewards.intel);
+            }
+            "favors" => {
+                apply_delta_at(
+                    &mut state.rewards.favors,
+                    parts.get(1),
+                    &mut applied,
+                    "favors",
+                );
+                state.rewards.favors = clamp_metric(state.rewards.favors);
+            }
             "job" => {
                 if let Some(job) = parts.get(1).and_then(|value| parse_job_status(value.trim())) {
                     state.job_status = job;
                     applied.push(format!("job -> {:?}", job));
+                    career_changed = true;
                 }
             }
             "job_role" => {
                 if let Some(role) = parts.get(1).and_then(|value| parse_job_role(value.trim())) {
                     state.job.role = role;
                     applied.push(format!("job role -> {:?}", role));
+                    career_changed = true;
                 }
             }
             "job_level" => {
@@ -347,6 +523,7 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                     "job_level",
                 );
                 state.job.level = state.job.level.clamp(0, 10);
+                career_changed = true;
             }
             "job_satisfaction" => {
                 apply_delta_at(
@@ -366,14 +543,41 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                 );
                 state.job.stability = clamp_metric(state.job.stability);
             }
+            "career_xp" => {
+                apply_delta_at(
+                    &mut state.career_xp,
+                    parts.get(1),
+                    &mut applied,
+                    "career_xp",
+                );
+                state.career_xp = clamp_progress(state.career_xp);
+            }
             "contact" => {
                 if let Some(name) = parts.get(1).map(|value| value.trim()) {
                     if !name.is_empty() {
-                        let level = parts
-                            .get(2)
-                            .and_then(|value| parse_relationship_level(value.trim()))
-                            .unwrap_or(RelationshipLevel::Acquaintance);
-                        state.upsert_contact(name, level, &mut applied);
+                        let mut level = RelationshipLevel::Acquaintance;
+                        let mut domain = None;
+                        if let Some(value) = parts.get(2).map(|value| value.trim()) {
+                            if let Some(parsed) = parse_relationship_level(value) {
+                                level = parsed;
+                            } else if let Some(parsed) = parse_contact_domain(value) {
+                                domain = Some(parsed);
+                            }
+                        }
+                        if domain.is_none() {
+                            domain = parts
+                                .get(3)
+                                .map(|value| value.trim())
+                                .and_then(parse_contact_domain);
+                        }
+                        state.upsert_contact(name, level, domain, &mut applied);
+                    }
+                }
+            }
+            "contact_domain" => {
+                if let (Some(name), Some(domain_raw)) = (parts.get(1), parts.get(2)) {
+                    if let Some(domain) = parse_contact_domain(domain_raw.trim()) {
+                        state.set_contact_domain(name.trim(), domain, &mut applied);
                     }
                 }
             }
@@ -401,7 +605,393 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
             _ => {}
         }
     }
+    if career_changed && !wage_override {
+        sync_career_compensation(state);
+    }
+    if matches!(state.job_status, JobStatus::Unemployed) {
+        state.finances.wage = 0;
+    }
+    if wealth_changed {
+        sync_finances_from_wealth(state);
+        refresh_wealth_tier(state);
+    } else if cash_changed {
+        sync_wealth_from_finances(state);
+    } else if debt_changed {
+        refresh_wealth_tier(state);
+    }
+    apply_career_progression(state, state.last_day);
+    rebuild_social_web(state);
+    update_civilian_tier(state);
+    update_network_rewards(state);
+    update_wealth_profile(state);
     applied
+}
+
+fn record_work_shift(state: &mut CivilianState) {
+    let base_xp = match state.job_status {
+        JobStatus::Employed => 4,
+        JobStatus::PartTime => 2,
+        JobStatus::Unemployed => 0,
+    };
+    if base_xp == 0 {
+        return;
+    }
+
+    let satisfaction_bonus = ((state.job.satisfaction - 50) / 15).clamp(-2, 3);
+    let stability_bonus = ((state.job.stability - 50) / 20).clamp(-1, 2);
+    let support_bonus = if state.social.support > 60 { 1 } else { 0 };
+    let strain_penalty = if state.social.strain > 60 { -2 } else { 0 };
+    let xp_gain = (base_xp + satisfaction_bonus + stability_bonus + support_bonus + strain_penalty)
+        .max(1);
+
+    state.career_xp = clamp_progress(state.career_xp + xp_gain);
+
+    let mut satisfaction_delta = 0;
+    if state.social.support > 55 {
+        satisfaction_delta += 1;
+    }
+    if state.social.strain > 55 {
+        satisfaction_delta -= 2;
+    }
+    if matches!(state.job_status, JobStatus::PartTime) {
+        satisfaction_delta += 1;
+    }
+    state.job.satisfaction = clamp_metric(state.job.satisfaction + satisfaction_delta);
+
+    let mut stability_delta = 0;
+    if state.job.satisfaction > 60 {
+        stability_delta += 1;
+    }
+    if state.social.strain > 65 {
+        stability_delta -= 1;
+    }
+    state.job.stability = clamp_metric(state.job.stability + stability_delta);
+}
+
+fn apply_career_progression(state: &mut CivilianState, day: u32) {
+    if matches!(state.job_status, JobStatus::Unemployed) {
+        return;
+    }
+    let cap = max_job_level(state.job_status);
+    if state.job.level >= cap {
+        return;
+    }
+    if day < state.last_promotion_day.saturating_add(PROMOTION_COOLDOWN_DAYS) {
+        return;
+    }
+    let threshold = promotion_threshold(state.job.level);
+    if state.career_xp < threshold {
+        return;
+    }
+
+    state.career_xp = clamp_progress(state.career_xp - threshold);
+    state.job.level += 1;
+    state.last_promotion_day = day;
+    state.job.satisfaction = clamp_metric(state.job.satisfaction + 4);
+    state.job.stability = clamp_metric(state.job.stability + 3);
+    state.reputation.career = clamp_metric(
+        state.reputation.career + career_model(state.job.role).reputation_step,
+    );
+    apply_promotion_rewards(state);
+    sync_career_compensation(state);
+}
+
+fn apply_promotion_rewards(state: &mut CivilianState) {
+    state.rewards.income_boost = clamp_metric(state.rewards.income_boost + 1);
+    if state.job.level >= 3 {
+        state.rewards.access = clamp_metric(state.rewards.access + 1);
+    }
+    if state.job.level >= 4 {
+        state.rewards.intel = clamp_metric(state.rewards.intel + 1);
+    }
+    if state.job.level >= 5 {
+        state.rewards.favors = clamp_metric(state.rewards.favors + 1);
+    }
+}
+
+fn update_social_web(state: &mut CivilianState) {
+    let bond_delta = daily_bond_delta(state);
+    let reputation = state.reputation.clone();
+    let job = state.job.clone();
+    let social = state.social.clone();
+    let finances = state.finances.clone();
+    for contact in &mut state.contacts {
+        if bond_delta != 0 {
+            contact.bond = clamp_metric(contact.bond + bond_delta);
+            contact.level = relationship_level_from_bond(contact.bond);
+        }
+        let target = contact_influence_target(contact, &reputation, &job, &social, &finances);
+        if contact.influence < target {
+            contact.influence = clamp_metric(contact.influence + 1);
+        } else if contact.influence > target {
+            contact.influence = clamp_metric(contact.influence - 1);
+        }
+    }
+    rebuild_social_web(state);
+}
+
+fn rebuild_social_web(state: &mut CivilianState) {
+    let mut professional = 0;
+    let mut community = 0;
+    let mut media = 0;
+    let mut underground = 0;
+
+    for contact in &state.contacts {
+        let weight = contact.influence + contact.bond / 2;
+        match contact.domain {
+            ContactDomain::Professional => professional += weight,
+            ContactDomain::Community => community += weight,
+            ContactDomain::Media => media += weight,
+            ContactDomain::Underground => underground += weight,
+        }
+    }
+
+    professional += state.reputation.career * 2;
+    community += state.reputation.community * 2;
+    media += state.reputation.media * 2;
+    underground += (state.social.obligation / 2).clamp(0, 50);
+
+    state.social_web.professional = normalize_web_score(professional);
+    state.social_web.community = normalize_web_score(community);
+    state.social_web.media = normalize_web_score(media);
+    state.social_web.underground = normalize_web_score(underground);
+}
+
+fn update_civilian_tier(state: &mut CivilianState) {
+    let base = (state.social_web.professional
+        + state.social_web.community
+        + state.social_web.media
+        + state.social_web.underground)
+        / 4;
+    let contact_bonus = state.contacts.len().min(12) as i32 * 3;
+    let career_bonus = state.job.level * 4;
+    let total = base + contact_bonus + career_bonus;
+
+    state.civilian_tier = if total >= 110 {
+        CivilianTier::PowerBroker
+    } else if total >= 85 {
+        CivilianTier::Influential
+    } else if total >= 60 {
+        CivilianTier::Connected
+    } else {
+        CivilianTier::Local
+    };
+}
+
+fn update_network_rewards(state: &mut CivilianState) {
+    let mut rewards = CivilianRewards::default();
+    rewards.income_boost = clamp_metric(state.social_web.professional / 18);
+    rewards.access = clamp_metric(state.social_web.community / 16);
+    rewards.safehouse = clamp_metric(state.social_web.underground / 16);
+    rewards.intel = clamp_metric(state.social_web.media / 18);
+    rewards.favors = clamp_metric(
+        (state.social_web.community + state.social_web.underground) / 32,
+    );
+
+    match state.civilian_tier {
+        CivilianTier::Connected => {
+            rewards.favors = clamp_metric(rewards.favors + 1);
+        }
+        CivilianTier::Influential => {
+            rewards.favors = clamp_metric(rewards.favors + 2);
+            rewards.access = clamp_metric(rewards.access + 1);
+        }
+        CivilianTier::PowerBroker => {
+            rewards.favors = clamp_metric(rewards.favors + 3);
+            rewards.access = clamp_metric(rewards.access + 2);
+            rewards.intel = clamp_metric(rewards.intel + 2);
+        }
+        CivilianTier::Local => {}
+    }
+
+    state.network_rewards = rewards;
+}
+
+fn refresh_wealth_tier(state: &mut CivilianState) {
+    state.wealth.refresh_tier(state.finances.debt as i64);
+}
+
+fn update_wealth_profile(state: &mut CivilianState) {
+    let rewards = state.effective_rewards();
+    let bonus_income = rewards.income_boost as i64 * INCOME_BOOST_CR;
+    state.wealth.income_per_tick = state.finances.wage as i64 + bonus_income;
+    state.wealth.upkeep_per_tick = lifestyle_upkeep(state.wealth.tier);
+    state.wealth.liquidity = clamp_liquidity(state.wealth.liquidity);
+}
+
+fn sync_finances_from_wealth(state: &mut CivilianState) {
+    state.finances.cash = clamp_i64_to_i32(state.wealth.current_cr);
+}
+
+fn sync_wealth_from_finances(state: &mut CivilianState) {
+    state.wealth.current_cr = state.finances.cash as i64;
+    refresh_wealth_tier(state);
+}
+
+fn clamp_i64_to_i32(value: i64) -> i32 {
+    value.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
+fn daily_bond_delta(state: &CivilianState) -> i32 {
+    let mut delta = 0;
+    if state.social.support > 60 {
+        delta += 1;
+    }
+    if state.social.strain > 60 {
+        delta -= 1;
+    }
+    if state.social.obligation > 65 {
+        delta -= 1;
+    }
+    delta
+}
+
+fn contact_influence_target(
+    contact: &Contact,
+    reputation: &ReputationTrack,
+    job: &CivilianJob,
+    social: &SocialTies,
+    finances: &CivilianFinances,
+) -> i32 {
+    let level_bonus = match contact.level {
+        RelationshipLevel::Stranger => 2,
+        RelationshipLevel::Acquaintance => 4,
+        RelationshipLevel::Friend => 6,
+        RelationshipLevel::Confidant => 8,
+        RelationshipLevel::Ally => 10,
+    };
+    let mut target = contact.bond / 10 + level_bonus;
+    match contact.domain {
+        ContactDomain::Professional => {
+            target += reputation.career / 12;
+            target += job.level * 2;
+        }
+        ContactDomain::Community => {
+            target += reputation.community / 12;
+            target += social.support / 15;
+        }
+        ContactDomain::Media => {
+            target += reputation.media / 12;
+            target += social.strain / 20;
+        }
+        ContactDomain::Underground => {
+            target += social.obligation / 12;
+            target += finances.debt.max(0) / 20;
+        }
+    }
+    clamp_metric(target)
+}
+
+fn normalize_web_score(score: i32) -> i32 {
+    (score / 4).clamp(0, 100)
+}
+
+fn promotion_threshold(level: i32) -> i32 {
+    let level = level.max(1);
+    12 + level * 8
+}
+
+fn max_job_level(status: JobStatus) -> i32 {
+    match status {
+        JobStatus::Employed => MAX_JOB_LEVEL,
+        JobStatus::PartTime => PART_TIME_LEVEL_CAP,
+        JobStatus::Unemployed => 1,
+    }
+}
+
+fn sync_career_compensation(state: &mut CivilianState) {
+    let cap = max_job_level(state.job_status);
+    state.job.level = state.job.level.clamp(0, cap);
+    state.finances.wage = career_wage(state.job.role, state.job.level, state.job_status);
+    update_wealth_profile(state);
+}
+
+fn career_wage(role: JobRole, level: i32, status: JobStatus) -> i32 {
+    let model = career_model(role);
+    let level = level.max(1);
+    let mut wage = model.base_wage + model.wage_step * (level - 1);
+    if matches!(status, JobStatus::PartTime) {
+        wage = ((wage as f32) * 0.7).round() as i32;
+    }
+    if matches!(status, JobStatus::Unemployed) {
+        wage = 0;
+    }
+    wage.max(0)
+}
+
+struct CareerModel {
+    base_wage: i32,
+    wage_step: i32,
+    reputation_step: i32,
+}
+
+fn career_model(role: JobRole) -> CareerModel {
+    match role {
+        JobRole::Lawyer => CareerModel {
+            base_wage: 70,
+            wage_step: 12,
+            reputation_step: 4,
+        },
+        JobRole::Journalist => CareerModel {
+            base_wage: 45,
+            wage_step: 7,
+            reputation_step: 3,
+        },
+        JobRole::Chef => CareerModel {
+            base_wage: 35,
+            wage_step: 5,
+            reputation_step: 2,
+        },
+        JobRole::Photographer => CareerModel {
+            base_wage: 40,
+            wage_step: 6,
+            reputation_step: 2,
+        },
+        JobRole::Scientist => CareerModel {
+            base_wage: 60,
+            wage_step: 10,
+            reputation_step: 4,
+        },
+        JobRole::Artist => CareerModel {
+            base_wage: 30,
+            wage_step: 5,
+            reputation_step: 3,
+        },
+        JobRole::Engineer => CareerModel {
+            base_wage: 55,
+            wage_step: 9,
+            reputation_step: 3,
+        },
+        JobRole::Nurse => CareerModel {
+            base_wage: 42,
+            wage_step: 6,
+            reputation_step: 3,
+        },
+        JobRole::Teacher => CareerModel {
+            base_wage: 38,
+            wage_step: 5,
+            reputation_step: 3,
+        },
+        JobRole::Mechanic => CareerModel {
+            base_wage: 37,
+            wage_step: 5,
+            reputation_step: 2,
+        },
+        JobRole::Analyst => CareerModel {
+            base_wage: 50,
+            wage_step: 8,
+            reputation_step: 3,
+        },
+        JobRole::Contractor => CareerModel {
+            base_wage: 45,
+            wage_step: 6,
+            reputation_step: 2,
+        },
+    }
+}
+
+fn clamp_progress(value: i32) -> i32 {
+    value.clamp(0, CAREER_XP_CAP)
 }
 
 fn queue_event(state: &mut CivilianState, storylet_id: &str, created_tick: u64) {
@@ -430,6 +1020,36 @@ fn apply_delta_at(
     if let Ok(delta) = value.trim().parse::<i32>() {
         *target += delta;
         applied.push(format!("{} {:+}", label, delta));
+    }
+}
+
+fn apply_delta_at_i64(
+    target: &mut i64,
+    value: Option<&&str>,
+    applied: &mut Vec<String>,
+    label: &str,
+) {
+    let Some(value) = value else {
+        return;
+    };
+    if let Ok(delta) = value.trim().parse::<i64>() {
+        *target += delta;
+        applied.push(format!("{} {:+}", label, delta));
+    }
+}
+
+fn apply_delta_at_f32(
+    target: &mut f32,
+    value: Option<&&str>,
+    applied: &mut Vec<String>,
+    label: &str,
+) {
+    let Some(value) = value else {
+        return;
+    };
+    if let Ok(delta) = value.trim().parse::<f32>() {
+        *target += delta;
+        applied.push(format!("{} {:+.2}", label, delta));
     }
 }
 
@@ -471,17 +1091,53 @@ fn parse_relationship_level(value: &str) -> Option<RelationshipLevel> {
     }
 }
 
+fn parse_contact_domain(value: &str) -> Option<ContactDomain> {
+    match value.to_ascii_lowercase().as_str() {
+        "professional" => Some(ContactDomain::Professional),
+        "community" => Some(ContactDomain::Community),
+        "media" => Some(ContactDomain::Media),
+        "underground" => Some(ContactDomain::Underground),
+        _ => None,
+    }
+}
+
+fn default_contact_domain(role: JobRole) -> ContactDomain {
+    match role {
+        JobRole::Lawyer
+        | JobRole::Scientist
+        | JobRole::Engineer
+        | JobRole::Analyst
+        | JobRole::Contractor => ContactDomain::Professional,
+        JobRole::Journalist | JobRole::Photographer => ContactDomain::Media,
+        JobRole::Artist => ContactDomain::Community,
+        JobRole::Chef | JobRole::Nurse | JobRole::Teacher | JobRole::Mechanic => {
+            ContactDomain::Community
+        }
+    }
+}
+
 fn clamp_metric(value: i32) -> i32 {
     value.clamp(0, 100)
 }
 
 impl CivilianState {
-    fn upsert_contact(&mut self, name: &str, level: RelationshipLevel, applied: &mut Vec<String>) {
+    fn upsert_contact(
+        &mut self,
+        name: &str,
+        level: RelationshipLevel,
+        domain: Option<ContactDomain>,
+        applied: &mut Vec<String>,
+    ) {
         if let Some(contact) = self.contacts.iter_mut().find(|entry| entry.name == name) {
             contact.level = level;
+            if let Some(domain) = domain {
+                contact.domain = domain;
+                applied.push(format!("contact {} domain -> {:?}", name, domain));
+            }
             applied.push(format!("contact {} -> {:?}", name, level));
             return;
         }
+        let domain = domain.unwrap_or_else(|| default_contact_domain(self.job.role));
         let bond = match level {
             RelationshipLevel::Stranger => 15,
             RelationshipLevel::Acquaintance => 35,
@@ -492,6 +1148,7 @@ impl CivilianState {
         self.contacts.push(Contact {
             name: name.to_string(),
             level,
+            domain,
             bond,
             influence: 10,
         });
@@ -502,7 +1159,7 @@ impl CivilianState {
         let contact = match self.contacts.iter_mut().find(|entry| entry.name == name) {
             Some(contact) => contact,
             None => {
-                self.upsert_contact(name, RelationshipLevel::Acquaintance, applied);
+                self.upsert_contact(name, RelationshipLevel::Acquaintance, None, applied);
                 self.contacts
                     .iter_mut()
                     .find(|entry| entry.name == name)
@@ -523,7 +1180,7 @@ impl CivilianState {
         let contact = match self.contacts.iter_mut().find(|entry| entry.name == name) {
             Some(contact) => contact,
             None => {
-                self.upsert_contact(name, level, applied);
+                self.upsert_contact(name, level, None, applied);
                 return;
             }
         };
@@ -542,7 +1199,7 @@ impl CivilianState {
         let contact = match self.contacts.iter_mut().find(|entry| entry.name == name) {
             Some(contact) => contact,
             None => {
-                self.upsert_contact(name, RelationshipLevel::Acquaintance, applied);
+                self.upsert_contact(name, RelationshipLevel::Acquaintance, None, applied);
                 self.contacts
                     .iter_mut()
                     .find(|entry| entry.name == name)
@@ -551,6 +1208,23 @@ impl CivilianState {
         };
         contact.influence = clamp_metric(contact.influence + delta);
         applied.push(format!("contact influence {} {:+}", name, delta));
+    }
+
+    fn set_contact_domain(
+        &mut self,
+        name: &str,
+        domain: ContactDomain,
+        applied: &mut Vec<String>,
+    ) {
+        let contact = match self.contacts.iter_mut().find(|entry| entry.name == name) {
+            Some(contact) => contact,
+            None => {
+                self.upsert_contact(name, RelationshipLevel::Acquaintance, Some(domain), applied);
+                return;
+            }
+        };
+        contact.domain = domain;
+        applied.push(format!("contact {} domain -> {:?}", name, domain));
     }
 }
 

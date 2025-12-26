@@ -1,6 +1,9 @@
-/// Placeholder for the economy simulation.
-/// Eventually, this will handle salary payouts and rent deduction.
-pub fn economy_system() {
-    // Placeholder logic
-    // e.g., if time.day has changed, deposit salary.
+use bevy_ecs::prelude::*;
+
+use crate::simulation::civilian::{tick_civilian_economy, CivilianState};
+use crate::simulation::time::GameTime;
+
+/// Runs the daily economy tick (income + upkeep) for civilian finances.
+pub fn economy_system(mut civilian: ResMut<CivilianState>, time: Res<GameTime>) {
+    tick_civilian_economy(&mut civilian, &time);
 }

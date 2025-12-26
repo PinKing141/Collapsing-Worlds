@@ -104,6 +104,8 @@ pub fn run_nemesis_system(
             .get(&snapshot.location_id)
             .map(|loc| loc.heat)
             .unwrap_or(0);
+        let heat = (heat + state.global_threat).clamp(0, 100);
+        let effective_progress = apply_global_case_boost(snapshot.progress, state.global_threat);
         match state
             .candidates
             .iter_mut()
@@ -113,7 +115,7 @@ pub fn run_nemesis_system(
             }) {
             Some(candidate) => {
                 candidate.heat = heat;
-                candidate.case_progress = snapshot.progress;
+                candidate.case_progress = effective_progress;
                 update_memory(&mut candidate.memory, snapshot, identity_evidence);
             }
             None => {
@@ -123,7 +125,7 @@ pub fn run_nemesis_system(
                     faction_id: snapshot.faction_id.clone(),
                     location_id: snapshot.location_id,
                     heat,
-                    case_progress: snapshot.progress,
+                    case_progress: effective_progress,
                     memory,
                     adaptation_level: 0,
                     persona_arc: NemesisPersonaArc::SecretHunt,
@@ -143,6 +145,8 @@ pub fn run_nemesis_system(
         }) else {
             continue;
         };
+        let effective_progress = apply_global_case_boost(snapshot.progress, state.global_threat);
+        candidate.case_progress = effective_progress;
 
         let mut highest_level = candidate.adaptation_level;
         for threshold in state.thresholds.iter() {
@@ -194,7 +198,7 @@ pub fn run_nemesis_system(
         let Some(action) = select_action(
             director,
             candidate.heat,
-            snapshot.progress,
+            effective_progress,
             focus.as_ref(),
         ) else {
             continue;
@@ -207,7 +211,7 @@ pub fn run_nemesis_system(
             action,
         });
 
-        if should_trigger_confrontation(candidate, snapshot, time.tick) {
+        if should_trigger_confrontation(candidate, effective_progress, time.tick) {
             candidate.last_storylet_tick = time.tick;
             emit_confrontation_storylet(candidate, storylets, log);
         }
@@ -350,14 +354,14 @@ fn record_identity_traits(
 
 fn should_trigger_confrontation(
     candidate: &NemesisCandidate,
-    snapshot: &CaseSnapshot,
+    case_progress: u32,
     tick: u64,
 ) -> bool {
     if !candidate.is_nemesis {
         return false;
     }
     let heat_trigger = candidate.heat >= 70;
-    let progress_trigger = snapshot.progress >= 80;
+    let progress_trigger = case_progress >= 80;
     let cooldown_ready = tick.saturating_sub(candidate.last_storylet_tick) >= 5;
     cooldown_ready && (heat_trigger || progress_trigger)
 }
@@ -432,4 +436,12 @@ fn apply_pressure_delta(pressure: &mut PressureState, delta: &NemesisPressureDel
     pressure.moral = (pressure.moral + delta.moral).clamp(0.0, 100.0);
     pressure.resource = (pressure.resource + delta.resource).clamp(0.0, 100.0);
     pressure.psychological = (pressure.psychological + delta.psychological).clamp(0.0, 100.0);
+}
+
+fn apply_global_case_boost(progress: u32, global_threat: i32) -> u32 {
+    if global_threat <= 0 {
+        return progress;
+    }
+    let boost = (global_threat / 2).max(0) as u32;
+    (progress + boost).min(100)
 }

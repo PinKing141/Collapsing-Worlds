@@ -42,12 +42,20 @@ pub struct GlobalFactionDefinition {
     pub domain: FactionDomain,
     pub jurisdiction: Jurisdiction,
     pub global_thresholds: Vec<GlobalThreshold>,
+    pub global_escalation_thresholds: Vec<GlobalEscalationThreshold>,
     pub region_thresholds: Vec<RegionThreshold>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GlobalThreshold {
     pub min_pressure: f32,
+    pub level: String,
+    pub actions: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalEscalationThreshold {
+    pub min_escalation: GlobalEscalation,
     pub level: String,
     pub actions: Vec<String>,
 }
@@ -85,6 +93,18 @@ impl GlobalFactionDirector {
                         actions: vec!["OPEN_DIMENSIONAL_WARD".to_string()],
                     },
                 ],
+                global_escalation_thresholds: vec![
+                    GlobalEscalationThreshold {
+                        min_escalation: GlobalEscalation::Crisis,
+                        level: "COSMIC_OMEN".to_string(),
+                        actions: vec!["ALIGN_ASTRAL_SENSORS".to_string()],
+                    },
+                    GlobalEscalationThreshold {
+                        min_escalation: GlobalEscalation::Cosmic,
+                        level: "COSMIC_CONVERGENCE".to_string(),
+                        actions: vec!["MUSTER_CELESTIAL_ORDER".to_string()],
+                    },
+                ],
                 region_thresholds: Vec::new(),
             },
             GlobalFactionDefinition {
@@ -93,6 +113,11 @@ impl GlobalFactionDirector {
                 domain: FactionDomain::Military,
                 jurisdiction: Jurisdiction::Regional,
                 global_thresholds: Vec::new(),
+                global_escalation_thresholds: vec![GlobalEscalationThreshold {
+                    min_escalation: GlobalEscalation::Tense,
+                    level: "MONITOR".to_string(),
+                    actions: vec!["RAISE_READY_LEVEL".to_string()],
+                }],
                 region_thresholds: vec![
                     RegionThreshold {
                         min_escalation: RegionEscalation::Alert,
@@ -171,7 +196,18 @@ pub fn run_global_faction_director(
 
     let definitions = director.definitions.clone();
     for def in definitions.iter() {
-        if let Some(threshold) = select_global_threshold(&def.global_thresholds, region) {
+        if let Some(threshold) =
+            select_global_escalation_threshold(&def.global_escalation_thresholds, region)
+        {
+            push_global_event(
+                director,
+                log,
+                def,
+                GlobalFactionScope::Global,
+                &threshold.level,
+                &threshold.actions,
+            );
+        } else if let Some(threshold) = select_global_threshold(&def.global_thresholds, region) {
             push_global_event(
                 director,
                 log,
@@ -213,6 +249,18 @@ fn select_global_threshold<'a>(
         .iter()
         .filter(|threshold| region.global_pressure.total >= threshold.min_pressure)
         .max_by(|a, b| a.min_pressure.partial_cmp(&b.min_pressure).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+fn select_global_escalation_threshold<'a>(
+    thresholds: &'a [GlobalEscalationThreshold],
+    region: &RegionState,
+) -> Option<&'a GlobalEscalationThreshold> {
+    thresholds
+        .iter()
+        .filter(|threshold| {
+            region.global_pressure.escalation.rank() >= threshold.min_escalation.rank()
+        })
+        .max_by_key(|threshold| threshold.min_escalation.rank())
 }
 
 fn select_region_threshold<'a>(

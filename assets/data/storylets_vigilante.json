@@ -2,6 +2,63 @@
   "schema_version": 1,
   "storylets": [
     {
+      "id": "global_signal_noise_vigilante",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "flag.global_signal_noise"],
+      "text_stub": "Anomaly noise blinds surveillance feeds. Street intel wants your read on the pattern.",
+      "choices": [
+        {
+          "id": "lean_in",
+          "text": "Lean in and track the pattern yourself.",
+          "effects": ["heat +1", "public.suspicion +1"]
+        },
+        {
+          "id": "lay_low",
+          "text": "Lay low and let the noise pass.",
+          "effects": ["public.suspicion -1", "wanted.level -1"]
+        }
+      ],
+      "tags": ["global", "escalation", "omen"]
+    },
+    {
+      "id": "global_crisis_ripple_vigilante",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "flag.global_crisis_ripple"],
+      "text_stub": "The crisis ripple leaves neighborhoods exposed. Locals look to you for protection.",
+      "choices": [
+        {
+          "id": "protect",
+          "text": "Hold the line and protect the block.",
+          "effects": ["reputation +1", "stress +1"]
+        },
+        {
+          "id": "strike",
+          "text": "Strike at the source while it is distracted.",
+          "effects": ["heat +2", "wanted.level +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "crisis"]
+    },
+    {
+      "id": "global_cosmic_breach_vigilante",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == VIGILANTE", "flag.global_cosmic_breach"],
+      "text_stub": "The sky fractures. Gangs panic and the city trembles.",
+      "choices": [
+        {
+          "id": "stabilize",
+          "text": "Stabilize locals and keep panic down.",
+          "effects": ["public.suspicion -1", "reputation +1"]
+        },
+        {
+          "id": "exploit",
+          "text": "Exploit the chaos to settle a score.",
+          "effects": ["heat +3", "wanted.level +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "cosmic"]
+    },
+    {
       "id": "vig_curfew_sweep",
       "category": "INSTITUTIONAL_PRESSURE",
       "preconditions": ["alignment == VIGILANTE", "persona == MASKED", "heat >= 20"],

@@ -2,6 +2,63 @@
   "schema_version": 1,
   "storylets": [
     {
+      "id": "global_signal_noise_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_signal_noise"],
+      "text_stub": "Anomaly noise confuses surveillance. The city blinks at the wrong moment.",
+      "choices": [
+        {
+          "id": "exploit",
+          "text": "Exploit the blind spot for a quick score.",
+          "effects": ["heat +2", "loot +1"]
+        },
+        {
+          "id": "wait",
+          "text": "Wait and watch for a bigger opening.",
+          "effects": ["heat -1", "reputation +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "omen"]
+    },
+    {
+      "id": "global_crisis_ripple_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_crisis_ripple"],
+      "text_stub": "A crisis ripple stretches responders thin. Territory shifts overnight.",
+      "choices": [
+        {
+          "id": "expand",
+          "text": "Expand territory while the city looks away.",
+          "effects": ["heat +3", "influence +2"]
+        },
+        {
+          "id": "mask",
+          "text": "Mask your moves and let others fight.",
+          "effects": ["heat -1", "wanted.level -1"]
+        }
+      ],
+      "tags": ["global", "escalation", "crisis"]
+    },
+    {
+      "id": "global_cosmic_breach_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_cosmic_breach"],
+      "text_stub": "A cosmic breach cracks the sky. Power artifacts drift in the fallout.",
+      "choices": [
+        {
+          "id": "seize",
+          "text": "Seize whatever power drifts down.",
+          "effects": ["heat +3", "reputation +2"]
+        },
+        {
+          "id": "cover",
+          "text": "Use the chaos as cover for quieter schemes.",
+          "effects": ["heat +1", "wanted.level -1"]
+        }
+      ],
+      "tags": ["global", "escalation", "cosmic"]
+    },
+    {
       "id": "vil_power_grab",
       "category": "VILLAIN_OPPORTUNITIES",
       "preconditions": [

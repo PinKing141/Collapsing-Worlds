@@ -2,6 +2,63 @@
   "schema_version": 1,
   "storylets": [
     {
+      "id": "global_signal_noise_hero",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "flag.global_signal_noise"],
+      "text_stub": "A secure briefing requests your presence to interpret rising anomaly noise.",
+      "choices": [
+        {
+          "id": "support",
+          "text": "Offer tactical support and keep the brief quiet.",
+          "effects": ["reputation +1", "public.suspicion -1"]
+        },
+        {
+          "id": "decline",
+          "text": "Decline and stay on street patrol.",
+          "effects": ["public.suspicion +1", "heat +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "omen"]
+    },
+    {
+      "id": "global_crisis_ripple_hero",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "flag.global_crisis_ripple"],
+      "text_stub": "Coordinated crises stretch responders; they ask you to anchor a relief corridor.",
+      "choices": [
+        {
+          "id": "anchor",
+          "text": "Anchor the corridor and keep civilians safe.",
+          "effects": ["reputation +2", "stress +1"]
+        },
+        {
+          "id": "hunt",
+          "text": "Hunt the orchestrator behind the ripple.",
+          "effects": ["heat +2", "public.suspicion +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "crisis"]
+    },
+    {
+      "id": "global_cosmic_breach_hero",
+      "category": "INSTITUTIONAL_PRESSURE",
+      "preconditions": ["alignment == HERO", "flag.global_cosmic_breach"],
+      "text_stub": "A cosmic breach threatens the atmosphere. Every responder looks to you.",
+      "choices": [
+        {
+          "id": "shield",
+          "text": "Shield evacuation zones from fallout.",
+          "effects": ["reputation +2", "public.suspicion +1"]
+        },
+        {
+          "id": "strike",
+          "text": "Strike into the breach to disrupt it.",
+          "effects": ["heat +3", "wanted.level +1"]
+        }
+      ],
+      "tags": ["global", "escalation", "cosmic"]
+    },
+    {
       "id": "civ_job_late_notice",
       "category": "CIVILIAN_LIFE",
       "preconditions": ["alignment == HERO", "persona == CIVILIAN", "time.is_day"],

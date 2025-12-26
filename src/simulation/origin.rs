@@ -160,6 +160,19 @@ pub struct OriginQuestState {
     pub stage_progress: u32,
     pub completed: bool,
     pub completed_stages: Vec<String>,
+    pub discovered_paths: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct OriginEffectReport {
+    pub event_tags: Vec<String>,
+    pub discoveries: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct OriginEffectApplication {
+    pub rewards: Vec<OriginStageReward>,
+    pub messages: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -182,6 +195,71 @@ impl std::fmt::Display for OriginError {
 }
 
 impl std::error::Error for OriginError {}
+
+pub fn parse_origin_effects(effects: &[String]) -> OriginEffectReport {
+    let mut report = OriginEffectReport::default();
+    for effect in effects {
+        let mut parts = effect.split(':');
+        let key = parts.next().unwrap_or("").trim();
+        match key {
+            "origin.event" => {
+                if let Some(tag) = parts.next().map(str::trim).filter(|tag| !tag.is_empty()) {
+                    report.event_tags.push(tag.to_string());
+                }
+            }
+            "origin.discover" => {
+                if let Some(path_id) = parts.next().map(str::trim).filter(|id| !id.is_empty()) {
+                    report.discoveries.push(path_id.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    report
+}
+
+pub fn apply_origin_effects(
+    report: OriginEffectReport,
+    quest: &mut OriginQuestState,
+    catalog: &OriginPathCatalog,
+) -> OriginEffectApplication {
+    let mut application = OriginEffectApplication::default();
+
+    for path_id in report.discoveries {
+        let Some(path) = catalog.paths.iter().find(|path| path.id == path_id) else {
+            application
+                .messages
+                .push(format!("Origin clue ignored (unknown path): {}", path_id));
+            continue;
+        };
+        if push_unique(&mut quest.discovered_paths, path.id.clone()) {
+            application.messages.push(format!(
+                "Origin path discovered: {} - {}",
+                path.id, path.label
+            ));
+        }
+    }
+
+    if quest.path_id.is_some() {
+        for tag in report.event_tags {
+            let before_stage = quest.stage_index;
+            let before_progress = quest.stage_progress;
+            let before_completed = quest.completed_stages.len();
+            let mut rewards = register_origin_event(quest, catalog, &tag);
+            if before_stage != quest.stage_index
+                || before_progress != quest.stage_progress
+                || before_completed != quest.completed_stages.len()
+            {
+                application
+                    .messages
+                    .push(format!("Origin progress recorded: {}", tag));
+            }
+            application.rewards.append(&mut rewards);
+        }
+    }
+
+    application
+}
 
 impl OriginState {
     pub fn from_definition(origin: &OriginDefinition) -> Self {
@@ -475,6 +553,14 @@ fn hash_seed(value: &str) -> u64 {
         hash = hash.wrapping_mul(1099511628211);
     }
     hash
+}
+
+fn push_unique(target: &mut Vec<String>, value: String) -> bool {
+    if target.iter().any(|entry| entry == &value) {
+        return false;
+    }
+    target.push(value);
+    true
 }
 
 fn is_path_available(path: &OriginPathDefinition, origin_state: Option<&OriginState>) -> bool {

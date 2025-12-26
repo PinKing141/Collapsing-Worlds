@@ -106,6 +106,7 @@ pub struct NemesisAdaptationThreshold {
 pub struct NemesisState {
     pub candidates: Vec<NemesisCandidate>,
     pub thresholds: Vec<NemesisAdaptationThreshold>,
+    pub global_threat: i32,
 }
 
 impl Default for NemesisState {
@@ -132,6 +133,13 @@ impl Default for NemesisState {
                     cooldown: 1,
                 },
             ],
+            global_threat: 0,
         }
+    }
+}
+
+impl NemesisState {
+    pub fn apply_global_threat(&mut self, delta: i32) {
+        self.global_threat = (self.global_threat + delta).clamp(0, 50);
     }
 }

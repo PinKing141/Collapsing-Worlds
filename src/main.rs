@@ -9,6 +9,7 @@ use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, Sqlite
 use superhero_universe::core::world::ActionIntent;
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
 use superhero_universe::data::endgame_events::{load_endgame_event_catalog, EndgameEvent};
+use superhero_universe::data::global_events::{load_global_event_catalog, GlobalEventDefinition};
 use superhero_universe::data::nemesis::load_nemesis_action_catalog;
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::rules::{
@@ -21,25 +22,15 @@ use superhero_universe::simulation::agents::{
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
-    apply_civilian_effects, tick_civilian_life, CivilianState,
+    apply_civilian_effects, tick_civilian_economy, tick_civilian_life, CivilianState,
 };
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
-use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
->>>>>>> Stashed changes
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -47,13 +38,16 @@ use superhero_universe::simulation::growth::{
 use superhero_universe::simulation::identity_evidence::{
     combat_consequence_modifiers, IdentityEvidenceModifiers, IdentityEvidenceStore, PersonaHint,
 };
+use superhero_universe::simulation::nemesis::NemesisState;
 use superhero_universe::simulation::origin::{
-    current_origin_stage, load_origin_catalog, load_origin_path_catalog, register_origin_event,
-    select_origin_paths, start_origin_path, tick_origin_path, OriginPathCatalog,
-    OriginPathDefinition, OriginQuestState, OriginStageReward,
+    apply_origin_effects, current_origin_stage, load_origin_catalog, load_origin_path_catalog,
+    parse_origin_effects, register_origin_event, select_origin_paths, start_origin_path,
+    tick_origin_path, OriginPathCatalog, OriginPathDefinition, OriginQuestState, OriginStageReward,
 };
 use superhero_universe::simulation::pressure::PressureState;
-use superhero_universe::simulation::region::{RegionEventLog, RegionState};
+use superhero_universe::simulation::region::{
+    tick_global_events, GlobalEventLog, GlobalEventState, RegionEventLog, RegionState,
+};
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::{
     is_punctuation_storylet, storylet_has_gate_requirements, StoryletLibrary,
@@ -159,6 +153,9 @@ fn main() {
     let mut event_log = WorldEventLog::default();
     let mut region = RegionState::default();
     let mut region_events = RegionEventLog::default();
+    let mut global_event_state = GlobalEventState::default();
+    let mut global_event_log = GlobalEventLog::default();
+    let mut nemesis_state = NemesisState::default();
     let mut persona_stack = persona_stack;
     let alignment = alignment;
     let mut storylet_state = storylet_state;
@@ -195,19 +192,8 @@ fn main() {
         }
     };
     let mut agent_events = AgentEventLog::default();
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    let mut combat = world_state.combat;
-    let mut endgame_state = EndgameState::default();
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     let mut combat = combat;
-    let mut transformation_state: Option<TransformationState> = None;
->>>>>>> Stashed changes
+    let mut endgame_state = EndgameState::default();
     let mut target = TargetContext {
         distance_m: Some(10),
         has_line_of_sight: true,
@@ -234,8 +220,9 @@ fn main() {
 
     let civilian_events = load_civilian_event_library();
     let endgame_events = load_endgame_event_library();
+    let global_events = load_global_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -255,7 +242,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -593,6 +580,9 @@ fn main() {
                     &origin_catalog,
                     &origin_paths,
                     &nemesis_catalog,
+                    &region,
+                    &global_events,
+                    &global_event_state,
                 );
                 println!("{}", panel);
             }
@@ -626,6 +616,9 @@ fn main() {
                         resolve_civilian_event(
                             &mut civilian_state,
                             &civilian_events,
+                            &mut origin_quest,
+                            &origin_paths,
+                            &mut pressure,
                             event_id,
                             choice_id,
                         );
@@ -633,6 +626,41 @@ fn main() {
                     }
                     Some(_) => {
                         println!("Usage: civilian [events|resolve <event_id> <choice_id>]");
+                    }
+                }
+            }
+            "global" => {
+                let sub = parts.next();
+                match sub {
+                    None => {
+                        print_global_escalation(&region);
+                        print_pending_global_events(&global_event_state, &global_events, &game_time);
+                    }
+                    Some("events") => {
+                        print_pending_global_events(&global_event_state, &global_events, &game_time);
+                    }
+                    Some("resolve") => {
+                        let Some(event_id) = parts.next() else {
+                            println!("Usage: global resolve <event_id> <choice_id>");
+                            continue;
+                        };
+                        let Some(choice_id) = parts.next() else {
+                            println!("Usage: global resolve <event_id> <choice_id>");
+                            continue;
+                        };
+                        resolve_global_event(
+                            &mut global_event_state,
+                            &global_events,
+                            &mut pressure,
+                            &mut nemesis_state,
+                            &mut storylet_state,
+                            event_id,
+                            choice_id,
+                        );
+                        apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
+                    }
+                    Some(_) => {
+                        println!("Usage: global [events|resolve <event_id> <choice_id>]");
                     }
                 }
             }
@@ -1029,6 +1057,9 @@ fn main() {
                     &mut pressure,
                     &mut region,
                     &mut region_events,
+                    &mut global_event_state,
+                    &mut global_event_log,
+                    &global_events,
                     &mut global_faction_director,
                     &mut global_faction_events,
                     &mut origin_quest,
@@ -1054,8 +1085,6 @@ fn main() {
                     &storylet_state,
                     &persona_stack,
                     alignment,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
                 );
                 print_tick_summary(
                     &world,
@@ -1064,10 +1093,6 @@ fn main() {
                     &cases,
                     &pressure,
                     &endgame_state,
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
                 );
                 print_case_log(&mut case_log);
             }
@@ -1679,14 +1704,18 @@ fn print_scene(scene: &WorldEvidence) {
 
 fn print_civilian_status(state: &CivilianState, time: &GameTime) {
     let pressure = state.pressure_targets();
+    let rewards = state.effective_rewards();
+    let (career_xp, career_needed) = state.career_progress();
     println!("Civilian status @ {}:", time.to_string());
     println!(
-        "  Job: {:?} ({:?} L{} | satisfaction={} stability={})",
+        "  Job: {:?} ({:?} L{} | satisfaction={} stability={} | career_xp {}/{})",
         state.job_status,
         state.job.role,
         state.job.level,
         state.job.satisfaction,
-        state.job.stability
+        state.job.stability,
+        career_xp,
+        career_needed
     );
     println!(
         "  Finances: cash={} debt={} rent={} rent_due_in={} wage={}",
@@ -1697,6 +1726,14 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         state.finances.wage
     );
     println!(
+        "  Wealth: tier={:?} net_worth={}CR liquidity={:.2} income={}CR upkeep={}CR",
+        state.wealth.tier,
+        state.net_worth_cr(),
+        state.wealth.liquidity,
+        state.wealth.income_per_tick,
+        state.wealth.upkeep_per_tick
+    );
+    println!(
         "  Social: support={} strain={} obligation={}",
         state.social.support, state.social.strain, state.social.obligation
     );
@@ -1704,18 +1741,36 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         "  Reputation: career={} community={} media={}",
         state.reputation.career, state.reputation.community, state.reputation.media
     );
+    println!("  Civilian tier: {:?}", state.civilian_tier);
     println!(
-        "  Rewards: income_boost={} safehouse={} access={}",
-        state.rewards.income_boost, state.rewards.safehouse, state.rewards.access
+        "  Social web: professional={} community={} media={} underground={}",
+        state.social_web.professional,
+        state.social_web.community,
+        state.social_web.media,
+        state.social_web.underground
     );
+    println!(
+        "  Rewards: income_boost={} safehouse={} access={} intel={} favors={}",
+        rewards.income_boost, rewards.safehouse, rewards.access, rewards.intel, rewards.favors
+    );
+    if !state.network_rewards.is_empty() {
+        println!(
+            "  Network bonus: income_boost={} safehouse={} access={} intel={} favors={}",
+            state.network_rewards.income_boost,
+            state.network_rewards.safehouse,
+            state.network_rewards.access,
+            state.network_rewards.intel,
+            state.network_rewards.favors
+        );
+    }
     if state.contacts.is_empty() {
         println!("  Contacts: none");
     } else {
         println!("  Contacts:");
         for contact in &state.contacts {
             println!(
-                "    {} -> {:?} (bond={} influence={})",
-                contact.name, contact.level, contact.bond, contact.influence
+                "    {} -> {:?} {:?} (bond={} influence={})",
+                contact.name, contact.domain, contact.level, contact.bond, contact.influence
             );
         }
     }
@@ -1757,6 +1812,9 @@ fn print_pending_civilian_events(
 fn resolve_civilian_event(
     state: &mut CivilianState,
     library: &[CivilianStorylet],
+    origin_quest: &mut OriginQuestState,
+    origin_paths: &OriginPathCatalog,
+    pressure: &mut PressureState,
     event_id: &str,
     choice_id: &str,
 ) {
@@ -1774,6 +1832,14 @@ fn resolve_civilian_event(
     };
     let mut applied = apply_civilian_effects(state, &event_def.effects);
     applied.extend(apply_civilian_effects(state, &choice.effects));
+    let mut all_effects = Vec::new();
+    all_effects.extend(event_def.effects.iter().cloned());
+    all_effects.extend(choice.effects.iter().cloned());
+    let origin_effects = apply_origin_effects(
+        parse_origin_effects(&all_effects),
+        origin_quest,
+        origin_paths,
+    );
     if let Some(index) = state
         .pending_events
         .iter()
@@ -1789,6 +1855,158 @@ fn resolve_civilian_event(
         for entry in applied {
             println!("  {}", entry);
         }
+    }
+    if !origin_effects.messages.is_empty() {
+        println!("Origin updates:");
+        for entry in origin_effects.messages {
+            println!("  {}", entry);
+        }
+    }
+    apply_origin_rewards(origin_effects.rewards.as_slice(), pressure);
+}
+
+fn resolve_global_event(
+    state: &mut GlobalEventState,
+    catalog: &[GlobalEventDefinition],
+    pressure: &mut PressureState,
+    nemesis: &mut NemesisState,
+    storylet_state: &mut StoryletState,
+    event_id: &str,
+    choice_id: &str,
+) {
+    let Some(event_def) = find_global_event(catalog, event_id) else {
+        println!("Unknown global event: {}", event_id);
+        return;
+    };
+    let Some(choice) = event_def
+        .choices
+        .iter()
+        .find(|choice| choice.id == choice_id)
+    else {
+        println!("Unknown choice {} for event {}", choice_id, event_id);
+        return;
+    };
+
+    let mut applied = Vec::new();
+    let mut effects = Vec::new();
+    effects.extend(event_def.effects.iter().cloned());
+    effects.extend(choice.effects.iter().cloned());
+    applied.extend(apply_global_event_effects(
+        &effects,
+        pressure,
+        nemesis,
+        storylet_state,
+    ));
+
+    if let Some(index) = state
+        .pending
+        .iter()
+        .position(|event| event.event_id == event_id)
+    {
+        state.pending.remove(index);
+    }
+    state.fired.insert(event_def.id.clone());
+    storylet_state
+        .flags
+        .insert(format!("global_event_{}", event_def.id), true);
+    storylet_state
+        .flags
+        .insert("global_event".to_string(), true);
+
+    println!("Resolved {} -> {}", event_def.title, choice.text);
+    if applied.is_empty() {
+        println!("No global effects applied.");
+    } else {
+        println!("Applied global effects:");
+        for entry in applied {
+            println!("  {}", entry);
+        }
+    }
+}
+
+fn find_global_event<'a>(
+    catalog: &'a [GlobalEventDefinition],
+    event_id: &str,
+) -> Option<&'a GlobalEventDefinition> {
+    catalog.iter().find(|event| event.id == event_id)
+}
+
+fn apply_global_event_effects(
+    effects: &[String],
+    pressure: &mut PressureState,
+    nemesis: &mut NemesisState,
+    storylet_state: &mut StoryletState,
+) -> Vec<String> {
+    let mut applied = Vec::new();
+    for effect in effects {
+        let mut parts = effect.split(':');
+        let key = parts.next().unwrap_or("").trim();
+        match key {
+            "pressure.temporal" => {
+                apply_pressure_delta(&mut pressure.temporal, parts.next(), "pressure.temporal", &mut applied);
+            }
+            "pressure.identity" => {
+                apply_pressure_delta(&mut pressure.identity, parts.next(), "pressure.identity", &mut applied);
+            }
+            "pressure.institutional" => {
+                apply_pressure_delta(
+                    &mut pressure.institutional,
+                    parts.next(),
+                    "pressure.institutional",
+                    &mut applied,
+                );
+            }
+            "pressure.moral" => {
+                apply_pressure_delta(&mut pressure.moral, parts.next(), "pressure.moral", &mut applied);
+            }
+            "pressure.resource" => {
+                apply_pressure_delta(
+                    &mut pressure.resource,
+                    parts.next(),
+                    "pressure.resource",
+                    &mut applied,
+                );
+            }
+            "pressure.psychological" => {
+                apply_pressure_delta(
+                    &mut pressure.psychological,
+                    parts.next(),
+                    "pressure.psychological",
+                    &mut applied,
+                );
+            }
+            "nemesis.threat" => {
+                if let Some(delta_raw) = parts.next() {
+                    if let Ok(delta) = delta_raw.trim().parse::<i32>() {
+                        nemesis.apply_global_threat(delta);
+                        applied.push(format!("nemesis threat {:+}", delta));
+                    }
+                }
+            }
+            "storylet.flag" => {
+                if let Some(flag) = parts.next().map(str::trim).filter(|flag| !flag.is_empty()) {
+                    storylet_state.flags.insert(flag.to_string(), true);
+                    applied.push(format!("storylet flag {}", flag));
+                }
+            }
+            _ => {}
+        }
+    }
+    applied
+}
+
+fn apply_pressure_delta(
+    target: &mut f32,
+    value: Option<&str>,
+    label: &str,
+    applied: &mut Vec<String>,
+) {
+    let Some(value) = value else {
+        return;
+    };
+    if let Ok(delta) = value.trim().parse::<f32>() {
+        *target = (*target + delta).clamp(0.0, 100.0);
+        applied.push(format!("{} {:+.1}", label, delta));
     }
 }
 
@@ -2115,6 +2333,9 @@ fn tick_world(
     pressure: &mut PressureState,
     region: &mut RegionState,
     region_events: &mut RegionEventLog,
+    global_event_state: &mut GlobalEventState,
+    global_event_log: &mut GlobalEventLog,
+    global_events: &[GlobalEventDefinition],
     global_faction_director: &mut GlobalFactionDirector,
     global_faction_events: &mut GlobalFactionEventLog,
     origin_quest: &mut OriginQuestState,
@@ -2141,6 +2362,7 @@ fn tick_world(
             &mut agent_event_log,
         );
         tick_civilian_life(civilian_state, game_time);
+        tick_civilian_economy(civilian_state, game_time);
         storylet_state.tick();
         let rewards = tick_origin_path(origin_quest, origin_paths);
         apply_origin_rewards(rewards.as_slice(), pressure);
@@ -2171,16 +2393,7 @@ fn tick_world(
             alignment,
             persona_stack,
             storylet_state,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
             endgame_state,
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
             city,
             scene,
             cases,
@@ -2195,6 +2408,13 @@ fn tick_world(
             );
         }
         run_region_update(region, city, pressure, city_events, region_events);
+        tick_global_events(
+            global_event_state,
+            global_events,
+            region,
+            game_time,
+            global_event_log,
+        );
         run_global_faction_director(global_faction_director, region, global_faction_events);
     }
 }
@@ -2344,9 +2564,6 @@ fn load_civilian_event_library() -> Vec<CivilianStorylet> {
     }
 }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 fn load_endgame_event_library() -> Vec<EndgameEvent> {
     match load_endgame_event_catalog("./assets/data/endgame_events.json") {
         Ok(catalog) => catalog.events,
@@ -2354,11 +2571,55 @@ fn load_endgame_event_library() -> Vec<EndgameEvent> {
             eprintln!("Failed to load endgame events: {}", err);
             Vec::new()
         }
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+    }
+}
+
+fn load_global_event_library() -> Vec<GlobalEventDefinition> {
+    match load_global_event_catalog("./assets/data/global_events.json") {
+        Ok(catalog) => catalog.events,
+        Err(err) => {
+            eprintln!("Failed to load global events: {}", err);
+            Vec::new()
+        }
+    }
+}
+
+fn print_global_escalation(region: &RegionState) {
+    println!(
+        "Global escalation: {:?} (pressure {:.1})",
+        region.global_pressure.escalation, region.global_pressure.total
+    );
+}
+
+fn print_pending_global_events(
+    state: &GlobalEventState,
+    catalog: &[GlobalEventDefinition],
+    time: &GameTime,
+) {
+    if state.pending.is_empty() {
+        println!("Global events: none");
+        return;
+    }
+    println!("Global events:");
+    for event in &state.pending {
+        let age = time.tick.saturating_sub(event.created_tick);
+        match find_global_event(catalog, &event.event_id) {
+            Some(def) => {
+                println!("  {} | {} | queued {} ticks ago", def.id, def.title, age);
+                for choice in &def.choices {
+                    println!("    [{}] {}", choice.id, choice.text);
+                }
+            }
+            None => {
+                println!(
+                    "  {} | (missing definition) | queued {} ticks ago",
+                    event.event_id, age
+                );
+            }
+        }
+    }
+}
+
 fn print_cast(characters: &[PersistentCharacter]) {
     println!("Characters: {}", characters.len());
     for (idx, character) in characters.iter().take(10).enumerate() {
@@ -2378,13 +2639,6 @@ fn print_cast(characters: &[PersistentCharacter]) {
     }
     if characters.len() > 10 {
         println!("  ...");
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     }
 }
 
@@ -2392,16 +2646,7 @@ struct StoryletContext {
     alignment: Alignment,
     active_persona: Option<PersonaType>,
     flags: HashSet<String>,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     endgame_state: Option<TransformationState>,
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
     public_suspicion: i32,
     civilian_suspicion: i32,
     wanted_level: i32,
@@ -2460,16 +2705,7 @@ fn list_storylets_available(
         alignment,
         persona_stack,
         storylet_state,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         endgame_state,
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         city,
         evidence,
         cases,
@@ -2548,11 +2784,6 @@ fn build_storylet_context(
     game_time: &GameTime,
 ) -> StoryletContext {
     let active_persona = persona_stack.active_persona();
-    let flags = storylet_state
-        .flags
-        .iter()
-        .filter_map(|(key, value)| value.then(|| key.clone()))
-        .collect();
     let (public_suspicion, civilian_suspicion, wanted_level, exposure_risk) = active_persona
         .map(|persona| {
             (
@@ -2590,16 +2821,7 @@ fn build_storylet_context(
         alignment,
         active_persona: active_persona.map(|persona| persona.persona_type),
         flags,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         endgame_state: endgame_state.phase,
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         public_suspicion,
         civilian_suspicion,
         wanted_level,
@@ -2870,6 +3092,16 @@ fn print_origin_paths(paths: &[OriginPathDefinition], seed: u64) {
 fn print_origin_path_status(state: &OriginQuestState, catalog: &OriginPathCatalog) {
     let Some(path_id) = state.path_id.as_deref() else {
         println!("Origin path: none selected.");
+        if !state.discovered_paths.is_empty() {
+            println!("Discovered origin paths:");
+            for id in &state.discovered_paths {
+                if let Some(path) = catalog.paths.iter().find(|path| path.id == *id) {
+                    println!("  {} - {}", path.id, path.label);
+                } else {
+                    println!("  {}", id);
+                }
+            }
+        }
         return;
     };
     let path = catalog.paths.iter().find(|path| path.id == path_id);

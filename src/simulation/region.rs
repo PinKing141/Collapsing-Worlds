@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -73,7 +73,8 @@ impl RegionEscalation {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum GlobalEscalation {
     Stable,
     Tense,
@@ -112,6 +113,38 @@ pub struct RegionEvent {
 #[derive(Debug, Clone)]
 pub enum RegionEventKind {
     CityHeatResponseChanged { response: crate::simulation::city::HeatResponse },
+}
+
+#[derive(Resource, Debug, Default)]
+pub struct GlobalEventLog(pub Vec<GlobalEventRecord>);
+
+#[derive(Debug, Clone)]
+pub struct GlobalEventRecord {
+    pub event_id: String,
+    pub escalation: GlobalEscalation,
+    pub trigger: GlobalEventTrigger,
+    pub tick: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobalEventTrigger {
+    EscalationShift,
+    DailyPulse,
+}
+
+#[derive(Resource, Debug, Clone)]
+pub struct GlobalEventState {
+    pub pending: Vec<GlobalEventInstance>,
+    pub fired: HashSet<String>,
+    pub cooldowns: HashMap<String, u32>,
+    pub last_day: u32,
+    pub last_escalation: GlobalEscalation,
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalEventInstance {
+    pub event_id: String,
+    pub created_tick: u64,
 }
 
 impl Default for RegionState {
@@ -166,6 +199,18 @@ impl Default for RegionState {
                 total: 0.0,
                 escalation: GlobalEscalation::Stable,
             },
+        }
+    }
+}
+
+impl Default for GlobalEventState {
+    fn default() -> Self {
+        Self {
+            pending: Vec::new(),
+            fired: HashSet::new(),
+            cooldowns: HashMap::new(),
+            last_day: 0,
+            last_escalation: GlobalEscalation::Stable,
         }
     }
 }
@@ -332,5 +377,106 @@ pub fn propagate_city_event(
         city_id: event.city_id,
         location_id: event.location_id,
         kind,
+    }
+}
+
+pub fn tick_global_events(
+    state: &mut GlobalEventState,
+    catalog: &[crate::data::global_events::GlobalEventDefinition],
+    region: &RegionState,
+    time: &crate::simulation::time::GameTime,
+    log: &mut GlobalEventLog,
+) {
+    let is_new_day = time.day != state.last_day;
+    if is_new_day {
+        state.last_day = time.day;
+        tick_global_cooldowns(state);
+    }
+
+    let escalation = region.global_pressure.escalation;
+    let escalation_changed = escalation != state.last_escalation;
+    if !is_new_day && !escalation_changed {
+        return;
+    }
+
+    let trigger = if escalation_changed {
+        GlobalEventTrigger::EscalationShift
+    } else {
+        GlobalEventTrigger::DailyPulse
+    };
+
+    if let Some(event) = select_global_event(state, catalog, escalation, time.tick) {
+        queue_global_event(state, event, time.tick);
+        log.0.push(GlobalEventRecord {
+            event_id: event.id.clone(),
+            escalation,
+            trigger,
+            tick: time.tick,
+        });
+    }
+
+    state.last_escalation = escalation;
+}
+
+fn select_global_event<'a>(
+    state: &GlobalEventState,
+    catalog: &'a [crate::data::global_events::GlobalEventDefinition],
+    escalation: GlobalEscalation,
+    tick: u64,
+) -> Option<&'a crate::data::global_events::GlobalEventDefinition> {
+    let mut candidates: Vec<&crate::data::global_events::GlobalEventDefinition> = catalog
+        .iter()
+        .filter(|event| event_matches_escalation(event, escalation))
+        .filter(|event| !state.pending.iter().any(|entry| entry.event_id == event.id))
+        .filter(|event| state.cooldowns.get(&event.id).copied().unwrap_or(0) == 0)
+        .collect();
+    if candidates.is_empty() {
+        return None;
+    }
+    candidates.sort_by(|a, b| a.id.cmp(&b.id));
+    let idx = (tick as usize) % candidates.len();
+    Some(candidates[idx])
+}
+
+fn event_matches_escalation(
+    event: &crate::data::global_events::GlobalEventDefinition,
+    escalation: GlobalEscalation,
+) -> bool {
+    if escalation.rank() < event.min_escalation.rank() {
+        return false;
+    }
+    if let Some(max) = event.max_escalation {
+        if escalation.rank() > max.rank() {
+            return false;
+        }
+    }
+    true
+}
+
+fn queue_global_event(
+    state: &mut GlobalEventState,
+    event: &crate::data::global_events::GlobalEventDefinition,
+    tick: u64,
+) {
+    state.pending.push(GlobalEventInstance {
+        event_id: event.id.clone(),
+        created_tick: tick,
+    });
+    let cooldown = event.cooldown_days.max(1);
+    state.cooldowns.insert(event.id.clone(), cooldown);
+}
+
+fn tick_global_cooldowns(state: &mut GlobalEventState) {
+    let mut to_clear = Vec::new();
+    for (id, days) in state.cooldowns.iter_mut() {
+        if *days > 0 {
+            *days -= 1;
+        }
+        if *days == 0 {
+            to_clear.push(id.clone());
+        }
+    }
+    for id in to_clear {
+        state.cooldowns.remove(&id);
     }
 }
