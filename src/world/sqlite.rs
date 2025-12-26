@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde_json;
 
+use crate::components::persona::{hero_persona_stack, Alignment, PersonaStack};
 use crate::rules::mastery::MasteryStage;
 use crate::rules::power::ExpressionId;
 use crate::rules::signature::SignatureType;
@@ -20,7 +22,7 @@ use crate::simulation::region::{ContinentId, CountryId, RegionId};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
 
-const WORLD_SCHEMA_VERSION: i64 = 4;
+const WORLD_SCHEMA_VERSION: i64 = 5;
 const WORLD_SAVE_VERSION: i64 = 1;
 
 const WORLD_DB_SCHEMA: &str = r#"
@@ -44,6 +46,12 @@ CREATE TABLE IF NOT EXISTS world_time (
   week INTEGER NOT NULL,
   month INTEGER NOT NULL,
   is_day INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS persona_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  alignment TEXT NOT NULL,
+  stack_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS locations (
@@ -220,6 +228,23 @@ fn response_for_heat(heat: i32) -> HeatResponse {
         HeatResponse::PolicePatrol
     } else {
         HeatResponse::None
+    }
+}
+
+fn alignment_to_str(alignment: Alignment) -> &'static str {
+    match alignment {
+        Alignment::Hero => "HERO",
+        Alignment::Vigilante => "VIGILANTE",
+        Alignment::Villain => "VILLAIN",
+    }
+}
+
+fn alignment_from_str(value: &str) -> Option<Alignment> {
+    match value {
+        "HERO" => Some(Alignment::Hero),
+        "VIGILANTE" => Some(Alignment::Vigilante),
+        "VILLAIN" => Some(Alignment::Villain),
+        _ => None,
     }
 }
 
@@ -451,6 +476,8 @@ pub struct WorldDbState {
     pub combat: CombatState,
     pub growth: GrowthState,
     pub storylet_state: StoryletState,
+    pub persona_stack: PersonaStack,
+    pub alignment: Alignment,
 }
 
 impl Default for WorldDbState {
@@ -466,6 +493,8 @@ impl Default for WorldDbState {
             combat,
             growth: GrowthState::default(),
             storylet_state: StoryletState::default(),
+            persona_stack: hero_persona_stack(),
+            alignment: Alignment::Hero,
         }
     }
 }
@@ -505,6 +534,7 @@ impl WorldDb {
         let active_location = LocationId(row.get::<_, i64>(1)? as u32);
 
         let game_time = self.load_game_time()?;
+        let (persona_stack, alignment) = self.load_persona_state()?;
         let mut city = self.load_city()?;
         city.active_location = active_location;
         let cases = self.load_cases()?;
@@ -520,6 +550,8 @@ impl WorldDb {
             combat,
             growth,
             storylet_state,
+            persona_stack,
+            alignment,
         }))
     }
 
@@ -543,6 +575,14 @@ impl WorldDb {
                 state.game_time.month as i64,
                 if state.game_time.is_day { 1 } else { 0 }
             ],
+        )?;
+
+        tx.execute("DELETE FROM persona_state", [])?;
+        let stack_json = serde_json::to_string(&state.persona_stack)
+            .map_err(|err| WorldDbError::InvalidData(err.to_string()))?;
+        tx.execute(
+            "INSERT INTO persona_state (id, alignment, stack_json) VALUES (1, ?1, ?2)",
+            params![alignment_to_str(state.alignment), stack_json],
         )?;
 
         tx.execute("DELETE FROM locations", [])?;
@@ -723,7 +763,10 @@ impl WorldDb {
                 if schema_version == WORLD_SCHEMA_VERSION && save_version == WORLD_SAVE_VERSION {
                     return Ok(());
                 }
-                if (schema_version == 1 || schema_version == 2 || schema_version == 3)
+                if (schema_version == 1
+                    || schema_version == 2
+                    || schema_version == 3
+                    || schema_version == 4)
                     && save_version == WORLD_SAVE_VERSION
                 {
                     self.conn.execute(
@@ -944,6 +987,30 @@ impl WorldDb {
             month,
             is_day,
         })
+    }
+
+    fn load_persona_state(&self) -> Result<(PersonaStack, Alignment), WorldDbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT alignment, stack_json FROM persona_state WHERE id = 1",
+                [],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
+
+        let Some((alignment_raw, stack_json)) = row else {
+            return Ok((hero_persona_stack(), Alignment::Hero));
+        };
+
+        let alignment = alignment_from_str(alignment_raw.as_str()).ok_or_else(|| {
+            WorldDbError::InvalidData(format!("unknown alignment {}", alignment_raw))
+        })?;
+
+        let stack = serde_json::from_str::<PersonaStack>(&stack_json)
+            .map_err(|err| WorldDbError::InvalidData(err.to_string()))?;
+
+        Ok((stack, alignment))
     }
 
     fn load_growth_state(&self) -> Result<GrowthState, WorldDbError> {

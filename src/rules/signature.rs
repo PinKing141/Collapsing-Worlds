@@ -22,7 +22,7 @@ pub enum SignatureType {
     KineticStress,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignatureSpec {
     pub signature_type: SignatureType,
     pub strength: i64,

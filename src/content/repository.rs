@@ -34,6 +34,13 @@ pub struct PowerStats {
     pub acquisition_count: i64,
 }
 
+#[derive(Debug, Clone)]
+pub struct OriginAcquisitionProfile {
+    pub acq_id: String,
+    pub power_id: PowerId,
+    pub rarity_weight: i64,
+}
+
 pub trait PowerRepository {
     fn stats(&self) -> Result<PowerStats, Box<dyn std::error::Error>>;
     fn expression(&self, expr_id: &ExpressionId) -> Result<ExpressionDef, Box<dyn std::error::Error>>;
@@ -49,4 +56,9 @@ pub trait PowerRepository {
         &self,
         persona_id: &str,
     ) -> Result<Vec<PersonaExpression>, Box<dyn std::error::Error>>;
+    fn acquisition_profiles_for_origin(
+        &self,
+        origin_class: &str,
+        origin_subtype: &str,
+    ) -> Result<Vec<OriginAcquisitionProfile>, Box<dyn std::error::Error>>;
 }

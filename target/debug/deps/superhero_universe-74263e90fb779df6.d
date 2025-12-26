@@ -1,6 +1,12 @@
+<<<<<<< Updated upstream
 C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds\target\debug\deps\superhero_universe-74263e90fb779df6.d: src\lib.rs src\components\mod.rs src\components\combat.rs src\components\faction.rs src\components\identity.rs src\components\persona.rs src\components\world.rs src\content\mod.rs src\content\repository.rs src\content\schema.rs src\content\sqlite.rs src\core\mod.rs src\core\ecs.rs src\core\serialization.rs src\core\world.rs src\data\mod.rs src\data\factions.rs src\data\civilian_events.rs src\data\endgame_events.rs src\data\storylets.rs src\data\nemesis.rs src\rules\mod.rs src\rules\cost.rs src\rules\expression.rs src\rules\mastery.rs src\rules\power.rs src\rules\signature.rs src\rules\use_power.rs src\simulation\mod.rs src\simulation\time.rs src\simulation\agents.rs src\simulation\city.rs src\simulation\region.rs src\simulation\evidence.rs src\simulation\case.rs src\simulation\identity_evidence.rs src\simulation\cast.rs src\simulation\storylets.rs src\simulation\storylet_state.rs src\simulation\combat.rs src\simulation\growth.rs src\simulation\pressure.rs src\simulation\origin.rs src\simulation\civilian.rs src\simulation\nemesis.rs src\simulation\endgame.rs src\systems\mod.rs src\systems\combat.rs src\systems\combat_loop.rs src\systems\case.rs src\systems\civilian.rs src\systems\economy.rs src\systems\event_resolver.rs src\systems\faction.rs src\systems\region.rs src\systems\heat.rs src\systems\nemesis.rs src\systems\persona.rs src\systems\pressure.rs src\systems\suspicion.rs src\systems\units.rs src\ui\mod.rs src\ui\authoring.rs src\world\mod.rs src\world\repository.rs src\world\sqlite.rs
 
 C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds\target\debug\deps\libsuperhero_universe-74263e90fb779df6.rmeta: src\lib.rs src\components\mod.rs src\components\combat.rs src\components\faction.rs src\components\identity.rs src\components\persona.rs src\components\world.rs src\content\mod.rs src\content\repository.rs src\content\schema.rs src\content\sqlite.rs src\core\mod.rs src\core\ecs.rs src\core\serialization.rs src\core\world.rs src\data\mod.rs src\data\factions.rs src\data\civilian_events.rs src\data\endgame_events.rs src\data\storylets.rs src\data\nemesis.rs src\rules\mod.rs src\rules\cost.rs src\rules\expression.rs src\rules\mastery.rs src\rules\power.rs src\rules\signature.rs src\rules\use_power.rs src\simulation\mod.rs src\simulation\time.rs src\simulation\agents.rs src\simulation\city.rs src\simulation\region.rs src\simulation\evidence.rs src\simulation\case.rs src\simulation\identity_evidence.rs src\simulation\cast.rs src\simulation\storylets.rs src\simulation\storylet_state.rs src\simulation\combat.rs src\simulation\growth.rs src\simulation\pressure.rs src\simulation\origin.rs src\simulation\civilian.rs src\simulation\nemesis.rs src\simulation\endgame.rs src\systems\mod.rs src\systems\combat.rs src\systems\combat_loop.rs src\systems\case.rs src\systems\civilian.rs src\systems\economy.rs src\systems\event_resolver.rs src\systems\faction.rs src\systems\region.rs src\systems\heat.rs src\systems\nemesis.rs src\systems\persona.rs src\systems\pressure.rs src\systems\suspicion.rs src\systems\units.rs src\ui\mod.rs src\ui\authoring.rs src\world\mod.rs src\world\repository.rs src\world\sqlite.rs
+=======
+C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds\target\debug\deps\superhero_universe-74263e90fb779df6.d: src\lib.rs src\components\mod.rs src\components\combat.rs src\components\faction.rs src\components\identity.rs src\components\persona.rs src\components\world.rs src\content\mod.rs src\content\repository.rs src\content\schema.rs src\content\sqlite.rs src\content\names.rs src\core\mod.rs src\core\ecs.rs src\core\serialization.rs src\core\world.rs src\data\mod.rs src\data\factions.rs src\data\civilian_events.rs src\data\storylets.rs src\data\nemesis.rs src\narrative\mod.rs src\narrative\identity.rs src\narrative\nemesis.rs src\narrative\storylets.rs src\rules\mod.rs src\rules\cost.rs src\rules\expression.rs src\rules\mastery.rs src\rules\power.rs src\rules\signature.rs src\rules\use_power.rs src\simulation\mod.rs src\simulation\time.rs src\simulation\agents.rs src\simulation\city.rs src\simulation\region.rs src\simulation\evidence.rs src\simulation\case.rs src\simulation\identity_evidence.rs src\simulation\cast.rs src\simulation\storylets.rs src\simulation\storylet_state.rs src\simulation\combat.rs src\simulation\growth.rs src\simulation\pressure.rs src\simulation\origin.rs src\simulation\civilian.rs src\simulation\nemesis.rs src\simulation\endgame.rs src\systems\mod.rs src\systems\combat.rs src\systems\combat_loop.rs src\systems\case.rs src\systems\civilian.rs src\systems\economy.rs src\systems\event_resolver.rs src\systems\faction.rs src\systems\region.rs src\systems\heat.rs src\systems\nemesis.rs src\systems\persona.rs src\systems\pressure.rs src\systems\suspicion.rs src\systems\units.rs src\ui\mod.rs src\ui\authoring.rs src\world\mod.rs src\world\repository.rs src\world\sqlite.rs
+
+C:\Users\fezeh\OneDrive\Documents\GitHub\Collapsing-Worlds\target\debug\deps\libsuperhero_universe-74263e90fb779df6.rmeta: src\lib.rs src\components\mod.rs src\components\combat.rs src\components\faction.rs src\components\identity.rs src\components\persona.rs src\components\world.rs src\content\mod.rs src\content\repository.rs src\content\schema.rs src\content\sqlite.rs src\content\names.rs src\core\mod.rs src\core\ecs.rs src\core\serialization.rs src\core\world.rs src\data\mod.rs src\data\factions.rs src\data\civilian_events.rs src\data\storylets.rs src\data\nemesis.rs src\narrative\mod.rs src\narrative\identity.rs src\narrative\nemesis.rs src\narrative\storylets.rs src\rules\mod.rs src\rules\cost.rs src\rules\expression.rs src\rules\mastery.rs src\rules\power.rs src\rules\signature.rs src\rules\use_power.rs src\simulation\mod.rs src\simulation\time.rs src\simulation\agents.rs src\simulation\city.rs src\simulation\region.rs src\simulation\evidence.rs src\simulation\case.rs src\simulation\identity_evidence.rs src\simulation\cast.rs src\simulation\storylets.rs src\simulation\storylet_state.rs src\simulation\combat.rs src\simulation\growth.rs src\simulation\pressure.rs src\simulation\origin.rs src\simulation\civilian.rs src\simulation\nemesis.rs src\simulation\endgame.rs src\systems\mod.rs src\systems\combat.rs src\systems\combat_loop.rs src\systems\case.rs src\systems\civilian.rs src\systems\economy.rs src\systems\event_resolver.rs src\systems\faction.rs src\systems\region.rs src\systems\heat.rs src\systems\nemesis.rs src\systems\persona.rs src\systems\pressure.rs src\systems\suspicion.rs src\systems\units.rs src\ui\mod.rs src\ui\authoring.rs src\world\mod.rs src\world\repository.rs src\world\sqlite.rs
+>>>>>>> Stashed changes
 
 src\lib.rs:
 src\components\mod.rs:
@@ -13,6 +19,7 @@ src\content\mod.rs:
 src\content\repository.rs:
 src\content\schema.rs:
 src\content\sqlite.rs:
+src\content\names.rs:
 src\core\mod.rs:
 src\core\ecs.rs:
 src\core\serialization.rs:
@@ -20,9 +27,18 @@ src\core\world.rs:
 src\data\mod.rs:
 src\data\factions.rs:
 src\data\civilian_events.rs:
+<<<<<<< Updated upstream
 src\data\endgame_events.rs:
 src\data\storylets.rs:
 src\data\nemesis.rs:
+=======
+src\data\storylets.rs:
+src\data\nemesis.rs:
+src\narrative\mod.rs:
+src\narrative\identity.rs:
+src\narrative\nemesis.rs:
+src\narrative\storylets.rs:
+>>>>>>> Stashed changes
 src\rules\mod.rs:
 src\rules\cost.rs:
 src\rules\expression.rs:

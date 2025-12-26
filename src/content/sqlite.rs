@@ -11,7 +11,8 @@ use crate::rules::expression::{
     Constraints, Delivery, ExpressionDef, ExpressionForm, ExpressionText, Scale,
 };
 use crate::content::repository::{
-    ExpressionId, PersonaExpression, PowerId, PowerInfo, PowerRepository, PowerStats,
+    ExpressionId, OriginAcquisitionProfile, PersonaExpression, PowerId, PowerInfo, PowerRepository,
+    PowerStats,
 };
 use crate::rules::signature::{SignatureSpec, SignatureType};
 
@@ -351,6 +352,35 @@ impl PowerRepository for SqlitePowerRepository {
                 is_unlocked: is_unlocked != 0,
                 expression,
             });
+        }
+
+        Ok(out)
+    }
+
+    fn acquisition_profiles_for_origin(
+        &self,
+        origin_class: &str,
+        origin_subtype: &str,
+    ) -> Result<Vec<OriginAcquisitionProfile>, Box<dyn std::error::Error>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT acq_id, power_id, rarity_weight\
+             FROM power_acquisition_profile\
+             WHERE is_enabled = 1\
+               AND origin_class = ?1\
+               AND (origin_subtype = ?2 OR origin_subtype IS NULL OR origin_subtype = '')",
+        )?;
+
+        let rows = stmt.query_map(params![origin_class, origin_subtype], |row| {
+            Ok(OriginAcquisitionProfile {
+                acq_id: row.get(0)?,
+                power_id: PowerId(row.get(1)?),
+                rarity_weight: row.get(2)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
         }
 
         Ok(out)

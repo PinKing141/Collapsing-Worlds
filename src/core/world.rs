@@ -13,6 +13,7 @@ use crate::core::serialization::{
 };
 use crate::simulation::time::GameTime;
 use crate::simulation::origin::assign_origin_for_player;
+use crate::content::names::{NameDb, NameGender};
 use crate::systems::combat::CombatLog;
 
 /// Intent-driven commands fed into the ECS each tick.
@@ -66,7 +67,7 @@ impl Game {
         let player_uid = allocate_entity_id(&mut world);
         let player = spawn_player(&mut world, player_uid);
         assign_origin_for_player(&mut world, player, seed);
-        spawn_demo_npcs(&mut world);
+        spawn_demo_npcs(&mut world, seed);
         let schedule = create_schedule();
 
         Self {
@@ -182,7 +183,7 @@ fn spawn_player(world: &mut World, uid: u32) -> Entity {
         .id()
 }
 
-fn spawn_demo_npcs(world: &mut World) {
+fn spawn_demo_npcs(world: &mut World, seed: u64) {
     // Simple set of test NPCs with different factions/health for targeting.
     let mut spawn_npc = |name: &str, pos: (i32, i32), hp: i32, faction: &str| {
         let uid = allocate_entity_id(world);
@@ -197,16 +198,85 @@ fn spawn_demo_npcs(world: &mut World) {
         ));
     };
 
+    let name_db = match NameDb::open_default() {
+        Ok(db) => Some(db),
+        Err(err) => {
+            eprintln!("Failed to open name DB: {}", err);
+            None
+        }
+    };
+    let mut rng = seed ^ 0x9E3779B97F4A7C15;
+
+    struct NpcTemplate {
+        label: &'static str,
+        pos: (i32, i32),
+        hp: i32,
+        faction: &'static str,
+        gender: Option<NameGender>,
+    }
+
     let roster = [
-        ("Training Dummy", (1, 0), 30, "Neutral"),
-        ("Street Thug", (2, 0), 40, "Gang"),
-        ("Gang Lieutenant", (3, 1), 60, "Gang"),
-        ("Agent", (-1, 0), 50, "Agency"),
-        ("Detective", (-2, -1), 55, "Police"),
+        NpcTemplate {
+            label: "Training Dummy",
+            pos: (1, 0),
+            hp: 30,
+            faction: "Neutral",
+            gender: None,
+        },
+        NpcTemplate {
+            label: "Street Thug",
+            pos: (2, 0),
+            hp: 40,
+            faction: "Gang",
+            gender: Some(NameGender::Male),
+        },
+        NpcTemplate {
+            label: "Gang Lieutenant",
+            pos: (3, 1),
+            hp: 60,
+            faction: "Gang",
+            gender: Some(NameGender::Male),
+        },
+        NpcTemplate {
+            label: "Agent",
+            pos: (-1, 0),
+            hp: 50,
+            faction: "Agency",
+            gender: Some(NameGender::Female),
+        },
+        NpcTemplate {
+            label: "Detective",
+            pos: (-2, -1),
+            hp: 55,
+            faction: "Police",
+            gender: Some(NameGender::Any),
+        },
     ];
 
-    for (name, pos, hp, faction) in roster {
-        spawn_npc(name, pos, hp, faction);
+    for npc in roster {
+        let name = build_npc_name(
+            npc.label,
+            name_db.as_ref(),
+            &mut rng,
+            npc.gender,
+        );
+        spawn_npc(&name, npc.pos, npc.hp, npc.faction);
+    }
+}
+
+fn build_npc_name(
+    label: &str,
+    name_db: Option<&NameDb>,
+    rng: &mut u64,
+    gender: Option<NameGender>,
+) -> String {
+    let (Some(db), Some(gender)) = (name_db, gender) else {
+        return label.to_string();
+    };
+
+    match db.random_full_name(rng, gender) {
+        Ok((first, last)) => format!("{} {} ({})", first, last, label),
+        Err(_) => label.to_string(),
     }
 }
 

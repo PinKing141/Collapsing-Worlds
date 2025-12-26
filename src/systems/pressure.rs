@@ -38,8 +38,8 @@ pub fn update_pressure(
         .sum();
     let evidence_pressure = (evidence_strength / 5.0).clamp(0.0, 100.0);
 
-    let mut active_case_count = 0.0;
-    let mut max_case_progress = 0.0;
+    let mut active_case_count: f32 = 0.0;
+    let mut max_case_progress: f32 = 0.0;
     for case in cases.cases.iter() {
         if case.location_id != location_id || case.status != CaseStatus::Active {
             continue;

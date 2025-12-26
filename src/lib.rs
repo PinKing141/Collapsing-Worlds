@@ -3,6 +3,7 @@ pub mod components;
 pub mod content;
 pub mod core;
 pub mod data;
+pub mod narrative;
 pub mod rules;
 pub mod simulation;
 pub mod systems;

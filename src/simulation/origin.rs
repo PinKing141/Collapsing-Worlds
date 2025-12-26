@@ -4,6 +4,7 @@ use std::path::Path;
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::content::{OriginAcquisitionProfile, PowerRepository, SqlitePowerRepository};
 use crate::components::identity::SuperIdentity;
 use crate::components::world::Position;
 use crate::rules::signature::{SignatureInstance, SignatureSpec, SignatureType};
@@ -165,7 +166,7 @@ pub struct OriginQuestState {
 pub enum OriginError {
     Io(std::io::Error),
     Parse(serde_json::Error),
-    Db(rusqlite::Error),
+    Repo(String),
     NotFound(String),
 }
 
@@ -174,20 +175,13 @@ impl std::fmt::Display for OriginError {
         match self {
             OriginError::Io(err) => write!(f, "I/O error: {}", err),
             OriginError::Parse(err) => write!(f, "Parse error: {}", err),
-            OriginError::Db(err) => write!(f, "Database error: {}", err),
+            OriginError::Repo(err) => write!(f, "Repository error: {}", err),
             OriginError::NotFound(message) => write!(f, "Not found: {}", message),
         }
     }
 }
 
 impl std::error::Error for OriginError {}
-
-#[derive(Debug, Clone)]
-struct AcquisitionProfile {
-    acq_id: String,
-    power_id: i64,
-    rarity_weight: i64,
-}
 
 impl OriginState {
     pub fn from_definition(origin: &OriginDefinition) -> Self {
@@ -205,10 +199,10 @@ impl OriginState {
     pub fn award_initial_powers(
         &mut self,
         origin: &OriginDefinition,
-        db_path: &Path,
+        repo: &dyn PowerRepository,
         seed: u64,
     ) -> Result<(), OriginError> {
-        let mut profiles = load_acquisition_profiles(db_path, origin)?;
+        let mut profiles = load_acquisition_profiles(repo, origin)?;
         if profiles.is_empty() {
             return Ok(());
         }
@@ -219,7 +213,7 @@ impl OriginState {
             let idx = weighted_choice_index(&profiles, &mut rng);
             let profile = profiles.swap_remove(idx);
             self.powers.push(CharacterPower {
-                power_id: profile.power_id,
+                power_id: profile.power_id.0,
                 expression_id: None,
                 acq_id: Some(profile.acq_id),
                 mastery: 0,
@@ -300,8 +294,15 @@ pub fn assign_origin_for_player(world: &mut World, player: Entity, seed: u64) {
     };
 
     let mut state = OriginState::from_definition(&origin);
-    if let Err(err) = state.award_initial_powers(&origin, Path::new(DEFAULT_CONTENT_DB_PATH), seed) {
-        eprintln!("Failed to award origin powers: {}", err);
+    match SqlitePowerRepository::open(Path::new(DEFAULT_CONTENT_DB_PATH)) {
+        Ok(repo) => {
+            if let Err(err) = state.award_initial_powers(&origin, &repo, seed) {
+                eprintln!("Failed to award origin powers: {}", err);
+            }
+        }
+        Err(err) => {
+            eprintln!("Failed to open content DB for origins: {}", err);
+        }
     }
     state.apply_effects(world, player, &origin);
     world.insert_resource(state);
@@ -415,39 +416,14 @@ fn origin_signatures(origin: &OriginDefinition) -> Vec<SignatureInstance> {
 }
 
 fn load_acquisition_profiles(
-    db_path: &Path,
+    repo: &dyn PowerRepository,
     origin: &OriginDefinition,
-) -> Result<Vec<AcquisitionProfile>, OriginError> {
-    let conn = rusqlite::Connection::open(db_path).map_err(OriginError::Db)?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT acq_id, power_id, rarity_weight\
-             FROM power_acquisition_profile\
-             WHERE is_enabled = 1\
-               AND origin_class = ?1\
-               AND (origin_subtype = ?2 OR origin_subtype IS NULL OR origin_subtype = '')",
-        )
-        .map_err(OriginError::Db)?;
-
-    let rows = stmt
-        .query_map((&origin.class_code, &origin.subtype_code), |row| {
-            Ok(AcquisitionProfile {
-                acq_id: row.get(0)?,
-                power_id: row.get(1)?,
-                rarity_weight: row.get(2)?,
-            })
-        })
-        .map_err(OriginError::Db)?;
-
-    let mut profiles = Vec::new();
-    for row in rows {
-        profiles.push(row.map_err(OriginError::Db)?);
-    }
-
-    Ok(profiles)
+) -> Result<Vec<OriginAcquisitionProfile>, OriginError> {
+    repo.acquisition_profiles_for_origin(&origin.class_code, &origin.subtype_code)
+        .map_err(|err| OriginError::Repo(err.to_string()))
 }
 
-fn weighted_choice_index(profiles: &[AcquisitionProfile], rng: &mut u64) -> usize {
+fn weighted_choice_index(profiles: &[OriginAcquisitionProfile], rng: &mut u64) -> usize {
     let total_weight: i64 = profiles
         .iter()
         .map(|p| p.rarity_weight.max(1))

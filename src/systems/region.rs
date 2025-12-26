@@ -169,7 +169,8 @@ pub fn run_global_faction_director(
         return;
     }
 
-    for def in director.definitions.iter() {
+    let definitions = director.definitions.clone();
+    for def in definitions.iter() {
         if let Some(threshold) = select_global_threshold(&def.global_thresholds, region) {
             push_global_event(
                 director,

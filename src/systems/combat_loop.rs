@@ -368,7 +368,7 @@ pub fn combat_end_consequences(
     CombatConsequences {
         signatures: signatures
             .into_iter()
-            .map(SignatureSpec::to_instance)
+            .map(|spec| spec.to_instance())
             .collect(),
         pressure_delta,
         combat_consequence,

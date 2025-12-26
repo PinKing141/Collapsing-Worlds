@@ -3,9 +3,7 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use superhero_universe::components::persona::{
-    hero_persona_stack, Alignment, PersonaStack, PersonaType,
-};
+use superhero_universe::components::persona::{Alignment, PersonaStack, PersonaType};
 use superhero_universe::components::world::Position;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
 use superhero_universe::core::world::ActionIntent;
@@ -31,6 +29,11 @@ use superhero_universe::simulation::combat::{
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
+<<<<<<< Updated upstream
+=======
+use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
+use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
+>>>>>>> Stashed changes
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -111,6 +114,13 @@ fn main() {
             WorldDbState::default()
         }
     };
+    let mut characters = match world_repo.load_characters() {
+        Ok(list) => list,
+        Err(err) => {
+            eprintln!("Failed to load characters: {}", err);
+            Vec::new()
+        }
+    };
 
     print_stats(&repo);
 
@@ -121,20 +131,32 @@ fn main() {
     };
     let mut evidence = WorldEvidence::default();
     let mut identity_evidence = IdentityEvidenceStore::default();
+    let WorldDbState {
+        world_turn,
+        game_time,
+        city,
+        cases,
+        combat,
+        growth,
+        storylet_state,
+        persona_stack,
+        alignment,
+    } = world_state;
+
     let mut world = WorldState {
-        turn: world_state.world_turn,
+        turn: world_turn,
         pressure: PressureModifiers::default(),
     };
-    let mut game_time = world_state.game_time;
-    let mut city = world_state.city;
+    let mut game_time = game_time;
+    let mut city = city;
     let mut city_events = CityEventLog::default();
     let mut event_log = WorldEventLog::default();
     let mut region = RegionState::default();
     let mut region_events = RegionEventLog::default();
-    let mut persona_stack = hero_persona_stack();
-    let alignment = Alignment::Hero;
-    let mut storylet_state = world_state.storylet_state;
-    let mut growth = world_state.growth;
+    let mut persona_stack = persona_stack;
+    let alignment = alignment;
+    let mut storylet_state = storylet_state;
+    let mut growth = growth;
     let storylets = load_storylet_library();
     let origin_paths = match load_origin_path_catalog("./assets/data/origin_paths.json") {
         Ok(catalog) => catalog,
@@ -157,7 +179,7 @@ fn main() {
     let mut resolved_faction_events = ResolvedFactionEventLog::default();
     let mut global_faction_director = GlobalFactionDirector::load_default();
     let mut global_faction_events = GlobalFactionEventLog::default();
-    let mut cases = world_state.cases;
+    let mut cases = cases;
     let mut case_log = CaseEventLog::default();
     let mut agents = match AgentRegistry::load_default() {
         Ok(registry) => registry,
@@ -167,8 +189,13 @@ fn main() {
         }
     };
     let mut agent_events = AgentEventLog::default();
+<<<<<<< Updated upstream
     let mut combat = world_state.combat;
     let mut endgame_state = EndgameState::default();
+=======
+    let mut combat = combat;
+    let mut transformation_state: Option<TransformationState> = None;
+>>>>>>> Stashed changes
     let mut target = TargetContext {
         distance_m: Some(10),
         has_line_of_sight: true,
@@ -196,7 +223,7 @@ fn main() {
     let civilian_events = load_civilian_event_library();
     let endgame_events = load_endgame_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -216,7 +243,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -244,6 +271,45 @@ fn main() {
             }
             "personas" => {
                 print_persona_stack(&persona_stack, world.turn);
+            }
+            "cast" => {
+                print_cast(&characters);
+            }
+            "promote" => {
+                let Some(first) = parts.next() else {
+                    println!("Usage: promote <first> <last> [role]");
+                    continue;
+                };
+                let Some(last) = parts.next() else {
+                    println!("Usage: promote <first> <last> [role]");
+                    continue;
+                };
+                let role = parts.next().unwrap_or("CIVILIAN");
+                let scope_id = format!("city:{}", city.city_id.0);
+                let candidate = PromotionCandidate {
+                    scope_id,
+                    first_name: first.to_string(),
+                    last_name: last.to_string(),
+                    role_type: role.to_string(),
+                    faction_id: None,
+                    rank: None,
+                    persona_kind: Some("CIVILIAN".to_string()),
+                    persona_label: Some("Civilian".to_string()),
+                    reason: PromotionReason::Manual,
+                };
+                match world_repo.promote_candidate(&candidate, world.turn) {
+                    Ok(character) => {
+                        println!(
+                            "Promoted {} {} ({}) -> {}",
+                            character.first_name,
+                            character.last_name,
+                            candidate.role_type,
+                            character.character_id
+                        );
+                        characters.push(character);
+                    }
+                    Err(err) => println!("Failed to promote: {}", err),
+                }
             }
             "growth" => {
                 let sub = parts.next();
@@ -397,6 +463,8 @@ fn main() {
                                             &combat,
                                             &growth,
                                             &storylet_state,
+                                            &persona_stack,
+                                            alignment,
                                         );
                                         print_event_log(&mut event_log);
                                         println!(
@@ -972,6 +1040,8 @@ fn main() {
                     &combat,
                     &growth,
                     &storylet_state,
+                    &persona_stack,
+                    alignment,
                 );
                 print_tick_summary(
                     &world,
@@ -998,6 +1068,8 @@ fn main() {
         &combat,
         &growth,
         &storylet_state,
+        &persona_stack,
+        alignment,
     );
 }
 
@@ -1073,11 +1145,13 @@ fn parse_paths(args: Vec<String>) -> (PathBuf, PathBuf) {
     let mut iter = args.iter();
     let mut content_path = PathBuf::from("./assets/db/content_v1.db");
     let mut world_path = PathBuf::from("./assets/db/world.db");
+    let mut explicit_content = false;
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--db" => {
                 if let Some(value) = iter.next() {
                     content_path = PathBuf::from(value);
+                    explicit_content = true;
                 }
             }
             "--world" => {
@@ -1086,6 +1160,16 @@ fn parse_paths(args: Vec<String>) -> (PathBuf, PathBuf) {
                 }
             }
             _ => {}
+        }
+    }
+    if !explicit_content {
+        let root_path = PathBuf::from("./content_v1.db");
+        if root_path.exists() && root_path != content_path {
+            eprintln!(
+                "Note: found {} but using {}. Consider removing the root copy.",
+                root_path.display(),
+                content_path.display()
+            );
         }
     }
     (content_path, world_path)
@@ -2069,7 +2153,10 @@ fn tick_world(
             alignment,
             persona_stack,
             storylet_state,
+<<<<<<< Updated upstream
             endgame_state,
+=======
+>>>>>>> Stashed changes
             city,
             scene,
             cases,
@@ -2186,6 +2273,8 @@ fn persist_world_state(
     combat: &CombatState,
     growth: &GrowthState,
     storylet_state: &StoryletState,
+    persona_stack: &PersonaStack,
+    alignment: Alignment,
 ) {
     let state = WorldDbState {
         world_turn: world.turn,
@@ -2195,6 +2284,8 @@ fn persist_world_state(
         combat: combat.clone(),
         growth: growth.clone(),
         storylet_state: storylet_state.clone(),
+        persona_stack: persona_stack.clone(),
+        alignment,
     };
     if let Err(err) = world_db.save_state(&state) {
         eprintln!("Failed to persist world state: {}", err);
@@ -2229,6 +2320,7 @@ fn load_civilian_event_library() -> Vec<CivilianStorylet> {
     }
 }
 
+<<<<<<< Updated upstream
 fn load_endgame_event_library() -> Vec<EndgameEvent> {
     match load_endgame_event_catalog("./assets/data/endgame_events.json") {
         Ok(catalog) => catalog.events,
@@ -2236,6 +2328,27 @@ fn load_endgame_event_library() -> Vec<EndgameEvent> {
             eprintln!("Failed to load endgame events: {}", err);
             Vec::new()
         }
+=======
+fn print_cast(characters: &[PersistentCharacter]) {
+    println!("Characters: {}", characters.len());
+    for (idx, character) in characters.iter().take(10).enumerate() {
+        let role = character
+            .roles
+            .get(0)
+            .map(|role| role.role_type.as_str())
+            .unwrap_or("UNKNOWN");
+        println!(
+            "  {}. {} {} ({}) id={}",
+            idx + 1,
+            character.first_name,
+            character.last_name,
+            role,
+            character.character_id
+        );
+    }
+    if characters.len() > 10 {
+        println!("  ...");
+>>>>>>> Stashed changes
     }
 }
 
@@ -2243,7 +2356,10 @@ struct StoryletContext {
     alignment: Alignment,
     active_persona: Option<PersonaType>,
     flags: HashSet<String>,
+<<<<<<< Updated upstream
     endgame_state: Option<TransformationState>,
+=======
+>>>>>>> Stashed changes
     public_suspicion: i32,
     civilian_suspicion: i32,
     wanted_level: i32,
@@ -2302,7 +2418,10 @@ fn list_storylets_available(
         alignment,
         persona_stack,
         storylet_state,
+<<<<<<< Updated upstream
         endgame_state,
+=======
+>>>>>>> Stashed changes
         city,
         evidence,
         cases,
@@ -2381,6 +2500,11 @@ fn build_storylet_context(
     game_time: &GameTime,
 ) -> StoryletContext {
     let active_persona = persona_stack.active_persona();
+    let flags = storylet_state
+        .flags
+        .iter()
+        .filter_map(|(key, value)| value.then(|| key.clone()))
+        .collect();
     let (public_suspicion, civilian_suspicion, wanted_level, exposure_risk) = active_persona
         .map(|persona| {
             (
@@ -2418,7 +2542,10 @@ fn build_storylet_context(
         alignment,
         active_persona: active_persona.map(|persona| persona.persona_type),
         flags,
+<<<<<<< Updated upstream
         endgame_state: endgame_state.phase,
+=======
+>>>>>>> Stashed changes
         public_suspicion,
         civilian_suspicion,
         wanted_level,

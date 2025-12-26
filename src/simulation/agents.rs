@@ -246,7 +246,7 @@ pub fn tick_agents_system(
     tick_agents(&mut registry, &city, &time, &mut events);
 }
 
-fn default_target_location(home: LocationId, haunt: LocationId, hour: u32) -> LocationId {
+fn default_target_location(home: LocationId, haunt: LocationId, hour: u8) -> LocationId {
     if (8..18).contains(&hour) {
         haunt
     } else {

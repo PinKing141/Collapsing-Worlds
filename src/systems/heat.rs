@@ -3,8 +3,12 @@ use bevy_ecs::prelude::*;
 use crate::components::world::{Player, Position};
 use crate::rules::signature::{SignatureInstance, SignatureType};
 use crate::simulation::case::CaseRegistry;
+<<<<<<< Updated upstream
 use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityState, HeatResponse, LocationId, LocationTag};
 use crate::simulation::combat::CombatConsequence;
+=======
+use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityId, CityState, HeatResponse, LocationId, LocationTag};
+>>>>>>> Stashed changes
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
 use crate::simulation::time::GameTime;
@@ -107,14 +111,16 @@ pub fn apply_signatures(
         total_delta += delta;
     }
 
+    let city_id = city.city_id;
     if let Some(location) = city.locations.get_mut(&location_id) {
         location.heat = (location.heat + total_delta).clamp(0, 100);
-        update_response(location, log, city, city_events);
+        update_response(location, log, city_id, city_events);
     }
 }
 
 pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry, city_events: &mut CityEventLog) {
     let mut log = WorldEventLog::default();
+    let city_id = city.city_id;
     for location in city.locations.values_mut() {
         let mut decay: i32 = 1;
         if location.police_presence >= 30 {
@@ -130,7 +136,7 @@ pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry, city_events: &mut 
             decay = decay.saturating_sub(1);
         }
         location.heat = (location.heat - decay).max(0);
-        update_response(location, &mut log, city, city_events);
+        update_response(location, &mut log, city_id, city_events);
     }
 }
 
@@ -159,7 +165,7 @@ pub fn apply_combat_consequence_heat(
 fn update_response(
     location: &mut crate::simulation::city::LocationState,
     log: &mut WorldEventLog,
-    city: &CityState,
+    city_id: CityId,
     city_events: &mut CityEventLog,
 ) {
     let next = response_for_heat(location.heat);
@@ -170,7 +176,7 @@ fn update_response(
             location.id.0, location.response
         ));
         city_events.0.push(CityEvent {
-            city_id: city.city_id,
+            city_id,
             location_id: location.id,
             kind: CityEventKind::HeatResponseChanged {
                 response: location.response,

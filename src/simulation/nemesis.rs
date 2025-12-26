@@ -46,7 +46,7 @@ impl NemesisMemory {
 
     pub fn record_form(&mut self, form: String) {
         if !self.forms.contains(&form) {
-            self.forms.push(form);
+            self.forms.push(form.clone());
         }
         *self.form_counts.entry(form).or_insert(0) += 1;
     }

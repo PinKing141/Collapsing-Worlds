@@ -1,0 +1,1 @@
+std::iter::Map<std::vec::IntoIter<SignatureSpec>, for<'a> fn(&'a SignatureSpec) -> SignatureInstance {SignatureSpec::to_instance}>
