@@ -4,8 +4,8 @@ use crate::rules::power::ExpressionId;
 use crate::rules::signature::{SignatureInstance, SignatureSpec, SignatureType};
 use crate::rules::use_power::{use_power, ActorState, TargetContext, UseContext, UseError, WorldState};
 use crate::simulation::combat::{
-    CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatSide,
-    CombatState, Combatant,
+    CombatConsequence, CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta,
+    CombatScale, CombatSide, CombatState, Combatant,
 };
 use crate::simulation::city::LocationId;
 
@@ -14,6 +14,7 @@ pub struct CombatTickResult {
     pub emitted_signatures: Vec<SignatureInstance>,
     pub ended: Option<CombatEnd>,
     pub escalated: bool,
+    pub post_combat_consequences: Option<CombatConsequences>,
     pub used_expression_id: Option<ExpressionId>,
     pub used_success: bool,
 }
@@ -24,6 +25,7 @@ impl Default for CombatTickResult {
             emitted_signatures: Vec::new(),
             ended: None,
             escalated: false,
+            post_combat_consequences: None,
             used_expression_id: None,
             used_success: false,
         }
@@ -37,6 +39,7 @@ pub fn start_combat(
     scale: CombatScale,
     player_name: &str,
     opponent_count: u32,
+    seed: u64,
 ) {
     state.active = true;
     state.source = source.to_string();
@@ -47,6 +50,7 @@ pub fn start_combat(
     state.combatants.clear();
     state.pending_player_expression = None;
     state.escape_progress = 0;
+    state.rng_state = seed_combat_rng(seed, location_id, scale, source, opponent_count);
 
     state.combatants.push(Combatant {
         id: 1,
@@ -191,6 +195,8 @@ pub fn combat_tick(
     if let Some(end_reason) = ended {
         finish_combat(state, end_reason);
         result.ended = Some(end_reason);
+        result.post_combat_consequences =
+            Some(combat_post_consequences(state, end_reason, target));
         return finalize_signatures(state.scale, result);
     }
 
@@ -243,7 +249,11 @@ pub fn resolve_combat(state: &mut CombatState) -> Option<CombatEnd> {
     Some(CombatEnd::Resolved)
 }
 
-pub fn combat_end_consequences(end: CombatEnd, scale: CombatScale) -> CombatConsequences {
+pub fn combat_end_consequences(
+    end: CombatEnd,
+    scale: CombatScale,
+    combat_consequence: CombatConsequence,
+) -> CombatConsequences {
     let (strength, persistence) = match scale {
         CombatScale::Street => (18, 4),
         CombatScale::District => (24, 5),
@@ -348,11 +358,11 @@ pub fn combat_end_consequences(end: CombatEnd, scale: CombatScale) -> CombatCons
 
     let pressure_delta = CombatPressureDelta {
         temporal: base_delta.temporal * scale_factor,
-        identity: base_delta.identity * scale_factor,
-        institutional: base_delta.institutional * scale_factor,
-        moral: base_delta.moral * scale_factor,
-        resource: base_delta.resource * scale_factor,
-        psychological: base_delta.psychological * scale_factor,
+        identity: base_delta.identity * scale_factor * identity_factor(combat_consequence),
+        institutional: base_delta.institutional * scale_factor * institutional_factor(combat_consequence),
+        moral: base_delta.moral * scale_factor * collateral_factor(combat_consequence),
+        resource: base_delta.resource * scale_factor * resource_factor(combat_consequence),
+        psychological: base_delta.psychological * scale_factor * notoriety_factor(combat_consequence),
     };
 
     CombatConsequences {
@@ -361,6 +371,7 @@ pub fn combat_end_consequences(end: CombatEnd, scale: CombatScale) -> CombatCons
             .map(SignatureSpec::to_instance)
             .collect(),
         pressure_delta,
+        combat_consequence,
     }
 }
 
@@ -483,4 +494,147 @@ fn amplify_signatures(signatures: &[SignatureInstance], scale: CombatScale) -> V
 
 fn log_use_failure(state: &mut CombatState, err: UseError) {
     state.log.push(format!("Power use failed: {:?}", err));
+}
+
+pub fn combat_post_consequences(
+    state: &mut CombatState,
+    end: CombatEnd,
+    target: &TargetContext,
+) -> CombatConsequences {
+    let combat_consequence = combat_consequence_metadata(state, end, target);
+    combat_end_consequences(end, state.scale, combat_consequence)
+}
+
+fn combat_consequence_metadata(
+    state: &mut CombatState,
+    end: CombatEnd,
+    target: &TargetContext,
+) -> CombatConsequence {
+    let public_base = if target.in_public { 55 } else { 20 };
+    let witness_boost = (target.witnesses.min(10) as i32) * 4;
+    let scale_public = match state.scale {
+        CombatScale::Street => 0,
+        CombatScale::District => 4,
+        CombatScale::City => 10,
+        CombatScale::National => 18,
+        CombatScale::Cosmic => 28,
+    };
+    let publicness = clamp_u8(
+        public_base + witness_boost + scale_public + roll_range(&mut state.rng_state, -6, 6),
+    );
+
+    let collateral_base = match state.scale {
+        CombatScale::Street => 12,
+        CombatScale::District => 20,
+        CombatScale::City => 32,
+        CombatScale::National => 46,
+        CombatScale::Cosmic => 62,
+    };
+    let collateral_shift = match end {
+        CombatEnd::PlayerEscaped => -4,
+        CombatEnd::PlayerDefeated => 12,
+        CombatEnd::OpponentsDefeated => 8,
+        CombatEnd::Resolved => -6,
+    };
+    let collateral = clamp_u8(
+        collateral_base + collateral_shift + roll_range(&mut state.rng_state, -8, 8),
+    );
+
+    let notoriety_base = match state.scale {
+        CombatScale::Street => 18,
+        CombatScale::District => 28,
+        CombatScale::City => 42,
+        CombatScale::National => 58,
+        CombatScale::Cosmic => 72,
+    };
+    let notoriety_shift = match end {
+        CombatEnd::PlayerEscaped => 6,
+        CombatEnd::PlayerDefeated => 16,
+        CombatEnd::OpponentsDefeated => 10,
+        CombatEnd::Resolved => -4,
+    };
+    let notoriety = clamp_u8(
+        notoriety_base
+            + notoriety_shift
+            + (publicness as i32 / 3)
+            + roll_range(&mut state.rng_state, -6, 6),
+    );
+
+    CombatConsequence {
+        publicness,
+        collateral,
+        notoriety,
+    }
+}
+
+fn seed_combat_rng(
+    seed: u64,
+    location_id: LocationId,
+    scale: CombatScale,
+    source: &str,
+    opponent_count: u32,
+) -> u64 {
+    seed ^ (location_id.0 as u64).wrapping_mul(31)
+        ^ scale_seed(scale)
+        ^ hash_seed(source)
+        ^ (opponent_count as u64).wrapping_shl(5)
+}
+
+fn scale_seed(scale: CombatScale) -> u64 {
+    match scale {
+        CombatScale::Street => 0x11,
+        CombatScale::District => 0x22,
+        CombatScale::City => 0x33,
+        CombatScale::National => 0x44,
+        CombatScale::Cosmic => 0x55,
+    }
+}
+
+fn next_u64(state: &mut u64) -> u64 {
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1);
+    *state
+}
+
+fn roll_range(state: &mut u64, min: i32, max: i32) -> i32 {
+    if min >= max {
+        return min;
+    }
+    let span = (max - min + 1) as u64;
+    let roll = (next_u64(state) % span) as i32;
+    min + roll
+}
+
+fn clamp_u8(value: i32) -> u8 {
+    value.clamp(0, 100) as u8
+}
+
+fn hash_seed(value: &str) -> u64 {
+    let mut hash = 1469598103934665603u64;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(1099511628211);
+    }
+    hash
+}
+
+fn identity_factor(consequence: CombatConsequence) -> f32 {
+    1.0 + (consequence.publicness as f32 / 160.0)
+}
+
+fn institutional_factor(consequence: CombatConsequence) -> f32 {
+    1.0 + ((consequence.publicness as f32 + consequence.collateral as f32) / 260.0)
+}
+
+fn collateral_factor(consequence: CombatConsequence) -> f32 {
+    1.0 + (consequence.collateral as f32 / 150.0)
+}
+
+fn resource_factor(consequence: CombatConsequence) -> f32 {
+    1.0 + (consequence.collateral as f32 / 240.0)
+}
+
+fn notoriety_factor(consequence: CombatConsequence) -> f32 {
+    1.0 + (consequence.notoriety as f32 / 180.0)
 }

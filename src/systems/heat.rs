@@ -4,6 +4,7 @@ use crate::components::world::{Player, Position};
 use crate::rules::signature::{SignatureInstance, SignatureType};
 use crate::simulation::case::CaseRegistry;
 use crate::simulation::city::{CityEvent, CityEventKind, CityEventLog, CityState, HeatResponse, LocationId, LocationTag};
+use crate::simulation::combat::CombatConsequence;
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::{IdentityEvidenceStore, PersonaHint};
 use crate::simulation::time::GameTime;
@@ -130,6 +131,28 @@ pub fn decay_heat(city: &mut CityState, cases: &CaseRegistry, city_events: &mut 
         }
         location.heat = (location.heat - decay).max(0);
         update_response(location, &mut log, city, city_events);
+    }
+}
+
+pub fn apply_combat_consequence_heat(
+    city: &mut CityState,
+    location_id: LocationId,
+    consequence: CombatConsequence,
+    log: &mut WorldEventLog,
+    city_events: &mut CityEventLog,
+) {
+    let public_delta = (consequence.publicness as i32 / 18).max(0);
+    let collateral_delta = (consequence.collateral as i32 / 14).max(0);
+    let notoriety_delta = (consequence.notoriety as i32 / 24).max(0);
+    let total_delta = public_delta + collateral_delta + notoriety_delta;
+
+    if total_delta == 0 {
+        return;
+    }
+
+    if let Some(location) = city.locations.get_mut(&location_id) {
+        location.heat = (location.heat + total_delta).clamp(0, 100);
+        update_response(location, log, city, city_events);
     }
 }
 
