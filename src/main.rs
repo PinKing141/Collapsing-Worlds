@@ -26,11 +26,14 @@ use superhero_universe::simulation::civilian::{
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
+<<<<<<< Updated upstream
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
 <<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
 use superhero_universe::simulation::endgame::{evaluate_transformation, TransformationState};
 >>>>>>> Stashed changes
@@ -190,9 +193,12 @@ fn main() {
     };
     let mut agent_events = AgentEventLog::default();
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     let mut combat = world_state.combat;
     let mut endgame_state = EndgameState::default();
 =======
+=======
+>>>>>>> Stashed changes
     let mut combat = combat;
     let mut transformation_state: Option<TransformationState> = None;
 >>>>>>> Stashed changes
@@ -1042,6 +1048,7 @@ fn main() {
                     &storylet_state,
                     &persona_stack,
                     alignment,
+<<<<<<< Updated upstream
                 );
                 print_tick_summary(
                     &world,
@@ -1050,6 +1057,8 @@ fn main() {
                     &cases,
                     &pressure,
                     &endgame_state,
+=======
+>>>>>>> Stashed changes
                 );
                 print_case_log(&mut case_log);
             }
@@ -2154,7 +2163,10 @@ fn tick_world(
             persona_stack,
             storylet_state,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             endgame_state,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
             city,
@@ -2321,6 +2333,7 @@ fn load_civilian_event_library() -> Vec<CivilianStorylet> {
 }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 fn load_endgame_event_library() -> Vec<EndgameEvent> {
     match load_endgame_event_catalog("./assets/data/endgame_events.json") {
         Ok(catalog) => catalog.events,
@@ -2329,6 +2342,8 @@ fn load_endgame_event_library() -> Vec<EndgameEvent> {
             Vec::new()
         }
 =======
+=======
+>>>>>>> Stashed changes
 fn print_cast(characters: &[PersistentCharacter]) {
     println!("Characters: {}", characters.len());
     for (idx, character) in characters.iter().take(10).enumerate() {
@@ -2348,6 +2363,9 @@ fn print_cast(characters: &[PersistentCharacter]) {
     }
     if characters.len() > 10 {
         println!("  ...");
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     }
 }
@@ -2357,7 +2375,10 @@ struct StoryletContext {
     active_persona: Option<PersonaType>,
     flags: HashSet<String>,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     endgame_state: Option<TransformationState>,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
     public_suspicion: i32,
@@ -2419,7 +2440,10 @@ fn list_storylets_available(
         persona_stack,
         storylet_state,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         endgame_state,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
         city,
@@ -2543,7 +2567,10 @@ fn build_storylet_context(
         active_persona: active_persona.map(|persona| persona.persona_type),
         flags,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         endgame_state: endgame_state.phase,
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
         public_suspicion,
