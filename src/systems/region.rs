@@ -12,7 +12,7 @@ use crate::simulation::region::{
 #[derive(Resource, Debug)]
 pub struct GlobalFactionDirector {
     definitions: Vec<GlobalFactionDefinition>,
-    last_levels: HashMap<(String, Option<u32>), String>,
+    last_levels: HashMap<(String, Option<u32>, GlobalFactionTrigger), String>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -42,6 +42,7 @@ pub struct GlobalFactionDefinition {
     pub domain: FactionDomain,
     pub jurisdiction: Jurisdiction,
     pub global_thresholds: Vec<GlobalThreshold>,
+    pub global_escalation_thresholds: Vec<GlobalEscalationThreshold>,
     pub region_thresholds: Vec<RegionThreshold>,
 }
 
@@ -53,10 +54,24 @@ pub struct GlobalThreshold {
 }
 
 #[derive(Debug, Clone)]
+pub struct GlobalEscalationThreshold {
+    pub min_escalation: GlobalEscalation,
+    pub level: String,
+    pub actions: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct RegionThreshold {
     pub min_escalation: RegionEscalation,
     pub level: String,
     pub actions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GlobalFactionTrigger {
+    Pressure,
+    Escalation,
+    Region,
 }
 
 impl Default for GlobalFactionDirector {
@@ -85,6 +100,18 @@ impl GlobalFactionDirector {
                         actions: vec!["OPEN_DIMENSIONAL_WARD".to_string()],
                     },
                 ],
+                global_escalation_thresholds: vec![
+                    GlobalEscalationThreshold {
+                        min_escalation: GlobalEscalation::Crisis,
+                        level: "CELESTIAL_VIGIL".to_string(),
+                        actions: vec!["SUMMON_WARDENS".to_string()],
+                    },
+                    GlobalEscalationThreshold {
+                        min_escalation: GlobalEscalation::Cosmic,
+                        level: "UNIVERSE_LOCKDOWN".to_string(),
+                        actions: vec!["SEAL_REALITY".to_string()],
+                    },
+                ],
                 region_thresholds: Vec::new(),
             },
             GlobalFactionDefinition {
@@ -93,6 +120,11 @@ impl GlobalFactionDirector {
                 domain: FactionDomain::Military,
                 jurisdiction: Jurisdiction::Regional,
                 global_thresholds: Vec::new(),
+                global_escalation_thresholds: vec![GlobalEscalationThreshold {
+                    min_escalation: GlobalEscalation::Tense,
+                    level: "GLOBAL_READINESS".to_string(),
+                    actions: vec!["ELEVATE_ALERT".to_string()],
+                }],
                 region_thresholds: vec![
                     RegionThreshold {
                         min_escalation: RegionEscalation::Alert,
@@ -144,9 +176,7 @@ pub fn run_region_update(
     region_events.0.clear();
     let region_id = city.region_id;
     for event in city_events.0.drain(..) {
-        region_events
-            .0
-            .push(propagate_city_event(event, region_id));
+        region_events.0.push(propagate_city_event(event, region_id));
     }
 }
 
@@ -178,9 +208,30 @@ pub fn run_global_faction_director(
                 GlobalFactionScope::Global,
                 &threshold.level,
                 &threshold.actions,
+                GlobalFactionTrigger::Pressure,
             );
         } else {
-            director.last_levels.remove(&(def.id.clone(), None));
+            director
+                .last_levels
+                .remove(&(def.id.clone(), None, GlobalFactionTrigger::Pressure));
+        }
+
+        if let Some(threshold) =
+            select_global_escalation_threshold(&def.global_escalation_thresholds, region)
+        {
+            push_global_event(
+                director,
+                log,
+                def,
+                GlobalFactionScope::Global,
+                &threshold.level,
+                &threshold.actions,
+                GlobalFactionTrigger::Escalation,
+            );
+        } else {
+            director
+                .last_levels
+                .remove(&(def.id.clone(), None, GlobalFactionTrigger::Escalation));
         }
 
         for (region_id, profile) in region.regions.iter() {
@@ -194,11 +245,14 @@ pub fn run_global_faction_director(
                     GlobalFactionScope::Region(*region_id),
                     &threshold.level,
                     &threshold.actions,
+                    GlobalFactionTrigger::Region,
                 );
             } else {
-                director
-                    .last_levels
-                    .remove(&(def.id.clone(), Some(region_id.0)));
+                director.last_levels.remove(&(
+                    def.id.clone(),
+                    Some(region_id.0),
+                    GlobalFactionTrigger::Region,
+                ));
             }
         }
     }
@@ -211,7 +265,11 @@ fn select_global_threshold<'a>(
     thresholds
         .iter()
         .filter(|threshold| region.global_pressure.total >= threshold.min_pressure)
-        .max_by(|a, b| a.min_pressure.partial_cmp(&b.min_pressure).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|a, b| {
+            a.min_pressure
+                .partial_cmp(&b.min_pressure)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
 }
 
 fn select_region_threshold<'a>(
@@ -224,6 +282,18 @@ fn select_region_threshold<'a>(
         .max_by_key(|threshold| threshold.min_escalation.rank())
 }
 
+fn select_global_escalation_threshold<'a>(
+    thresholds: &'a [GlobalEscalationThreshold],
+    region: &RegionState,
+) -> Option<&'a GlobalEscalationThreshold> {
+    thresholds
+        .iter()
+        .filter(|threshold| {
+            region.global_pressure.escalation.rank() >= threshold.min_escalation.rank()
+        })
+        .max_by_key(|threshold| threshold.min_escalation.rank())
+}
+
 fn push_global_event(
     director: &mut GlobalFactionDirector,
     log: &mut GlobalFactionEventLog,
@@ -231,12 +301,13 @@ fn push_global_event(
     scope: GlobalFactionScope,
     level: &str,
     actions: &[String],
+    trigger: GlobalFactionTrigger,
 ) {
     let scope_key = match scope {
         GlobalFactionScope::Global => None,
         GlobalFactionScope::Region(region_id) => Some(region_id.0),
     };
-    let key = (def.id.clone(), scope_key);
+    let key = (def.id.clone(), scope_key, trigger);
     if director
         .last_levels
         .get(&key)
@@ -258,9 +329,6 @@ fn push_global_event(
     });
 }
 
-pub fn global_escalation_triggered(
-    region: &RegionState,
-    escalation: GlobalEscalation,
-) -> bool {
+pub fn global_escalation_triggered(region: &RegionState, escalation: GlobalEscalation) -> bool {
     region.global_pressure.escalation.rank() >= escalation.rank()
 }

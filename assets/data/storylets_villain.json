@@ -203,6 +203,63 @@
         }
       ],
       "tags": ["rival", "territory"]
+    },
+    {
+      "id": "global_tension_breach_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_tension_breach"],
+      "text_stub": "Global tension opens black-market lanes. Opportunity or exposure?",
+      "choices": [
+        {
+          "id": "exploit",
+          "text": "Exploit the chaos.",
+          "effects": ["heat +2", "reputation +1"]
+        },
+        {
+          "id": "lay_low",
+          "text": "Lay low until the dust clears.",
+          "effects": ["heat -1", "pressure.resource +1"]
+        }
+      ],
+      "tags": ["global", "opportunity"]
+    },
+    {
+      "id": "global_crisis_protocols_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_crisis_protocols"],
+      "text_stub": "Crisis protocols lock down the city. Every heist becomes harder.",
+      "choices": [
+        {
+          "id": "force",
+          "text": "Force the issue.",
+          "effects": ["heat +3", "pressure.institutional +2"]
+        },
+        {
+          "id": "pivot",
+          "text": "Pivot to digital raids.",
+          "effects": ["pressure.resource -1", "reputation +1"]
+        }
+      ],
+      "tags": ["global", "heist"]
+    },
+    {
+      "id": "global_cosmic_alert_villain",
+      "category": "VILLAIN_OPPORTUNITIES",
+      "preconditions": ["alignment == VILLAIN", "flag.global_cosmic_alert"],
+      "text_stub": "The cosmic signal is power. You can seize it or sell it.",
+      "choices": [
+        {
+          "id": "seize",
+          "text": "Seize it for yourself.",
+          "effects": ["pressure.psychological +2", "reputation +2"]
+        },
+        {
+          "id": "auction",
+          "text": "Auction it to the highest bidder.",
+          "effects": ["pressure.resource -2", "heat +2"]
+        }
+      ],
+      "tags": ["global", "cosmic"]
     }
   ]
 }

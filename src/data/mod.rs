@@ -1,4 +1,5 @@
-pub mod factions;
 pub mod civilian_events;
-pub mod storylets;
+pub mod factions;
+pub mod global_events;
 pub mod nemesis;
+pub mod storylets;

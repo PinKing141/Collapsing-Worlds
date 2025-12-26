@@ -10,6 +10,7 @@ use superhero_universe::components::world::Position;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
 use superhero_universe::core::world::ActionIntent;
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
+use superhero_universe::data::global_events::{load_global_event_catalog, GlobalEventDefinition};
 use superhero_universe::data::nemesis::load_nemesis_action_catalog;
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::rules::{
@@ -41,7 +42,7 @@ use superhero_universe::simulation::origin::{
     OriginPathDefinition, OriginQuestState, OriginStageReward,
 };
 use superhero_universe::simulation::pressure::PressureState;
-use superhero_universe::simulation::region::{RegionEventLog, RegionState};
+use superhero_universe::simulation::region::{GlobalEventLog, RegionEventLog, RegionState};
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::{
     is_punctuation_storylet, storylet_has_gate_requirements, StoryletLibrary,
@@ -133,6 +134,13 @@ fn main() {
     let mut storylet_state = world_state.storylet_state;
     let mut growth = world_state.growth;
     let storylets = load_storylet_library();
+    let global_events = match load_global_event_catalog("./assets/data/global_events.json") {
+        Ok(catalog) => catalog.events,
+        Err(err) => {
+            eprintln!("Failed to load global events: {}", err);
+            Vec::new()
+        }
+    };
     let origin_paths = match load_origin_path_catalog("./assets/data/origin_paths.json") {
         Ok(catalog) => catalog,
         Err(err) => {
@@ -154,6 +162,7 @@ fn main() {
     let mut resolved_faction_events = ResolvedFactionEventLog::default();
     let mut global_faction_director = GlobalFactionDirector::load_default();
     let mut global_faction_events = GlobalFactionEventLog::default();
+    let mut global_event_log = GlobalEventLog::default();
     let mut cases = world_state.cases;
     let mut case_log = CaseEventLog::default();
     let mut agents = match AgentRegistry::load_default() {
@@ -230,7 +239,7 @@ fn main() {
                 }
             }
             "ctx" => {
-                print_context(&target, &world, &city, &pressure);
+                print_context(&target, &world, &city, &pressure, &region);
             }
             "loc" => {
                 print_location(&city);
@@ -781,9 +790,8 @@ fn main() {
                                 );
                                 let end_reason = tick_result.ended;
                                 if let Some(end_reason) = end_reason {
-                                    let consequences = tick_result
-                                        .post_combat_consequences
-                                        .unwrap_or_else(|| {
+                                    let consequences =
+                                        tick_result.post_combat_consequences.unwrap_or_else(|| {
                                             combat_post_consequences(
                                                 &mut combat,
                                                 end_reason,
@@ -934,6 +942,8 @@ fn main() {
                     &mut region_events,
                     &mut global_faction_director,
                     &mut global_faction_events,
+                    &global_events,
+                    &mut global_event_log,
                     &mut origin_quest,
                     &origin_paths,
                     count,
@@ -1174,6 +1184,7 @@ fn print_context(
     world: &WorldState,
     city: &CityState,
     pressure: &PressureState,
+    region: &RegionState,
 ) {
     let active = city
         .locations
@@ -1200,6 +1211,10 @@ fn print_context(
         pressure.moral,
         pressure.resource,
         pressure.psychological
+    );
+    println!(
+        "Global escalation: {:?} (pressure={:.1})",
+        region.global_pressure.escalation, region.global_pressure.total
     );
 }
 
@@ -1553,6 +1568,22 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         state.finances.wage
     );
     println!(
+        "  Economy: liquid={} savings={} investments={} assets={} liabilities={}",
+        state.economy.liquid,
+        state.economy.savings,
+        state.economy.investments,
+        state.economy.assets,
+        state.economy.liabilities
+    );
+    println!(
+        "  Net worth: {} ({}) | income={} expenses={} | gadget fund={}",
+        state.economy.net_worth(),
+        state.economy.wealth_tier(),
+        state.economy.monthly_income,
+        state.economy.monthly_expenses,
+        state.economy.gadget_fund
+    );
+    println!(
         "  Social: support={} strain={} obligation={}",
         state.social.support, state.social.strain, state.social.obligation
     );
@@ -1678,16 +1709,13 @@ fn record_identity_evidence(
         .unwrap_or((0, true));
     let modifiers = modifiers.unwrap_or_default();
     let witness_count = if in_public {
-        witnesses
-            .max(1)
-            .saturating_add(modifiers.witness_bonus)
+        witnesses.max(1).saturating_add(modifiers.witness_bonus)
     } else {
         0
     };
-    let visual_quality = (surveillance as i32
-        + (witness_count as i32 * 10)
-        + modifiers.visual_bonus)
-        .clamp(0, 100) as u8;
+    let visual_quality =
+        (surveillance as i32 + (witness_count as i32 * 10) + modifiers.visual_bonus).clamp(0, 100)
+            as u8;
     for sig in signatures {
         identity.record(
             location_id,
@@ -1971,6 +1999,8 @@ fn tick_world(
     region_events: &mut RegionEventLog,
     global_faction_director: &mut GlobalFactionDirector,
     global_faction_events: &mut GlobalFactionEventLog,
+    global_event_catalog: &[GlobalEventDefinition],
+    global_event_log: &mut GlobalEventLog,
     origin_quest: &mut OriginQuestState,
     origin_paths: &OriginPathCatalog,
     turns: u32,
@@ -2024,6 +2054,7 @@ fn tick_world(
         let ctx = build_storylet_context(
             alignment,
             persona_stack,
+            storylet_state,
             city,
             scene,
             cases,
@@ -2038,7 +2069,36 @@ fn tick_world(
             );
         }
         run_region_update(region, city, pressure, city_events, region_events);
+        if !global_event_catalog.is_empty() {
+            region.evaluate_global_events(global_event_catalog, global_event_log);
+            apply_global_event_effects(global_event_log, storylet_state, pressure);
+            region.update_global_pressure(pressure);
+        }
         run_global_faction_director(global_faction_director, region, global_faction_events);
+    }
+}
+
+fn apply_global_event_effects(
+    global_events: &GlobalEventLog,
+    storylet_state: &mut StoryletState,
+    pressure: &mut PressureState,
+) {
+    for event in &global_events.0 {
+        if !event.storylet_flag.is_empty() {
+            storylet_state
+                .flags
+                .insert(event.storylet_flag.clone(), true);
+        }
+        if event.pressure_boost != 0.0 {
+            pressure.temporal = (pressure.temporal + event.pressure_boost).clamp(0.0, 100.0);
+            pressure.identity = (pressure.identity + event.pressure_boost).clamp(0.0, 100.0);
+            pressure.institutional =
+                (pressure.institutional + event.pressure_boost).clamp(0.0, 100.0);
+            pressure.moral = (pressure.moral + event.pressure_boost).clamp(0.0, 100.0);
+            pressure.resource = (pressure.resource + event.pressure_boost).clamp(0.0, 100.0);
+            pressure.psychological =
+                (pressure.psychological + event.pressure_boost).clamp(0.0, 100.0);
+        }
     }
 }
 
@@ -2233,6 +2293,7 @@ struct StoryletContext {
     pressure_resource: i32,
     pressure_temporal: i32,
     pressure_psychological: i32,
+    flags: HashSet<String>,
 }
 
 struct StoryletEligibility {
@@ -2271,6 +2332,7 @@ fn list_storylets_available(
     let ctx = build_storylet_context(
         alignment,
         persona_stack,
+        storylet_state,
         city,
         evidence,
         cases,
@@ -2376,6 +2438,12 @@ fn build_storylet_context(
         event.location_id == city.active_location && event.signature.remaining_turns > 0
     });
 
+    let flags = storylet_state
+        .flags
+        .iter()
+        .filter_map(|(flag, enabled)| if *enabled { Some(flag.clone()) } else { None })
+        .collect();
+
     StoryletContext {
         alignment,
         active_persona: active_persona.map(|persona| persona.persona_type),
@@ -2397,6 +2465,7 @@ fn build_storylet_context(
         pressure_resource: pressure.resource.round() as i32,
         pressure_temporal: pressure.temporal.round() as i32,
         pressure_psychological: pressure.psychological.round() as i32,
+        flags,
     }
 }
 

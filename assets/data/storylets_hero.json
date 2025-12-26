@@ -432,6 +432,63 @@
         }
       ],
       "tags": ["alibi", "injury"]
+    },
+    {
+      "id": "global_tension_breach_hero",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "flag.global_tension_breach"],
+      "text_stub": "News feeds echo the same warning: the world is bracing. You decide how to answer.",
+      "choices": [
+        {
+          "id": "coordinate",
+          "text": "Coordinate with trusted responders.",
+          "effects": ["reputation +2", "pressure.institutional -2"]
+        },
+        {
+          "id": "go_solo",
+          "text": "Move alone and keep your methods clean.",
+          "effects": ["public.suspicion +1", "pressure.identity +1"]
+        }
+      ],
+      "tags": ["global", "response"]
+    },
+    {
+      "id": "global_crisis_protocols_hero",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "flag.global_crisis_protocols"],
+      "text_stub": "Crisis protocols activate. Emergency bands ask for your signature.",
+      "choices": [
+        {
+          "id": "sign",
+          "text": "Sign on and bring your allies.",
+          "effects": ["pressure.institutional -3", "reputation +1"]
+        },
+        {
+          "id": "hold_line",
+          "text": "Refuse; you keep your own rules.",
+          "effects": ["pressure.moral +2", "civilian.suspicion +1"]
+        }
+      ],
+      "tags": ["global", "protocol"]
+    },
+    {
+      "id": "global_cosmic_alert_hero",
+      "category": "MASKED_LIFE",
+      "preconditions": ["alignment == HERO", "flag.global_cosmic_alert"],
+      "text_stub": "The sky fractures with impossible light. You feel the weight of a larger war.",
+      "choices": [
+        {
+          "id": "prepare",
+          "text": "Prepare the city for the fallout.",
+          "effects": ["pressure.resource +2", "reputation +2"]
+        },
+        {
+          "id": "confront",
+          "text": "Go to the source before it reaches the streets.",
+          "effects": ["stress +2", "public.suspicion -1"]
+        }
+      ],
+      "tags": ["global", "cosmic"]
     }
   ]
 }

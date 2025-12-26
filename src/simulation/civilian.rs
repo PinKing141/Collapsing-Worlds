@@ -1,5 +1,6 @@
 use bevy_ecs::prelude::*;
 
+use crate::simulation::economy::{EconomyState, Money};
 use crate::simulation::time::GameTime;
 
 #[derive(Resource, Debug, Clone)]
@@ -7,6 +8,7 @@ pub struct CivilianState {
     pub job_status: JobStatus,
     pub job: CivilianJob,
     pub finances: CivilianFinances,
+    pub economy: EconomyState,
     pub social: SocialTies,
     pub reputation: ReputationTrack,
     pub rewards: CivilianRewards,
@@ -111,21 +113,29 @@ pub struct CivilianPressure {
 
 impl Default for CivilianState {
     fn default() -> Self {
+        let job_status = JobStatus::Employed;
+        let job = CivilianJob {
+            role: JobRole::Journalist,
+            level: 1,
+            satisfaction: 52,
+            stability: 48,
+        };
+        let finances = CivilianFinances {
+            cash: 120,
+            debt: 0,
+            rent: 80,
+            rent_due_in: 5,
+            wage: 45,
+        };
+        let mut economy = EconomyState::default();
+        economy.update_from_job(&job, job_status);
+        economy.update_monthly_expenses(finances.rent);
+
         Self {
-            job_status: JobStatus::Employed,
-            job: CivilianJob {
-                role: JobRole::Journalist,
-                level: 1,
-                satisfaction: 52,
-                stability: 48,
-            },
-            finances: CivilianFinances {
-                cash: 120,
-                debt: 0,
-                rent: 80,
-                rent_due_in: 5,
-                wage: 45,
-            },
+            job_status,
+            job,
+            finances,
+            economy,
             social: SocialTies {
                 support: 55,
                 strain: 10,
@@ -166,15 +176,19 @@ impl CivilianState {
             0.0
         };
 
-        let mut temporal = (base_time + rent_urgency + self.social.obligation as f32 * 0.6)
-            .clamp(0.0, 100.0);
+        let mut temporal =
+            (base_time + rent_urgency + self.social.obligation as f32 * 0.6).clamp(0.0, 100.0);
         if self.rewards.access > 0 {
             temporal -= self.rewards.access as f32 * 0.4;
         }
         temporal = temporal.clamp(0.0, 100.0);
 
-        let mut resource = (self.finances.debt.max(0) as f32 * 0.8).clamp(0.0, 60.0);
-        if self.finances.cash < self.finances.rent {
+        let liquid = self.economy.liquid.as_dollars() as f32;
+        let monthly_expenses = self.economy.monthly_expenses.as_dollars() as f32;
+        let liabilities = self.economy.liabilities.as_dollars() as f32;
+
+        let mut resource = (liabilities.max(0.0) * 0.08).clamp(0.0, 60.0);
+        if liquid < monthly_expenses {
             resource += 18.0;
         }
         if self.finances.rent_due_in <= 2 {
@@ -220,6 +234,9 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
         if state.finances.rent_due_in <= 0 {
             queue_event(state, "civilian_rent_due", time.tick);
         }
+        state.economy.update_from_job(&state.job, state.job_status);
+        state.economy.update_monthly_expenses(state.finances.rent);
+        state.economy.tick_daily(time.day);
     }
 
     if matches!(state.job_status, JobStatus::Employed | JobStatus::PartTime)
@@ -256,12 +273,58 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                 "rent_due_in",
             ),
             "wage" => apply_delta_at(&mut state.finances.wage, parts.get(1), &mut applied, "wage"),
+            "liquid" => apply_money_delta(
+                &mut state.economy.liquid,
+                parts.get(1),
+                &mut applied,
+                "liquid",
+            ),
+            "savings" => apply_money_delta(
+                &mut state.economy.savings,
+                parts.get(1),
+                &mut applied,
+                "savings",
+            ),
+            "investments" => apply_money_delta(
+                &mut state.economy.investments,
+                parts.get(1),
+                &mut applied,
+                "investments",
+            ),
+            "assets" => apply_money_delta(
+                &mut state.economy.assets,
+                parts.get(1),
+                &mut applied,
+                "assets",
+            ),
+            "liabilities" => apply_money_delta(
+                &mut state.economy.liabilities,
+                parts.get(1),
+                &mut applied,
+                "liabilities",
+            ),
+            "gadget_fund" => apply_money_delta(
+                &mut state.economy.gadget_fund,
+                parts.get(1),
+                &mut applied,
+                "gadget_fund",
+            ),
             "support" => {
-                apply_delta_at(&mut state.social.support, parts.get(1), &mut applied, "support");
+                apply_delta_at(
+                    &mut state.social.support,
+                    parts.get(1),
+                    &mut applied,
+                    "support",
+                );
                 state.social.support = clamp_metric(state.social.support);
             }
             "strain" => {
-                apply_delta_at(&mut state.social.strain, parts.get(1), &mut applied, "strain");
+                apply_delta_at(
+                    &mut state.social.strain,
+                    parts.get(1),
+                    &mut applied,
+                    "strain",
+                );
                 state.social.strain = clamp_metric(state.social.strain);
             }
             "obligation" => {
@@ -328,7 +391,10 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                 state.rewards.access = clamp_metric(state.rewards.access);
             }
             "job" => {
-                if let Some(job) = parts.get(1).and_then(|value| parse_job_status(value.trim())) {
+                if let Some(job) = parts
+                    .get(1)
+                    .and_then(|value| parse_job_status(value.trim()))
+                {
                     state.job_status = job;
                     applied.push(format!("job -> {:?}", job));
                 }
@@ -418,8 +484,18 @@ fn queue_event(state: &mut CivilianState, storylet_id: &str, created_tick: u64) 
     });
 }
 
-fn apply_delta_at(
-    target: &mut i32,
+fn apply_delta_at(target: &mut i32, value: Option<&&str>, applied: &mut Vec<String>, label: &str) {
+    let Some(value) = value else {
+        return;
+    };
+    if let Ok(delta) = value.trim().parse::<i32>() {
+        *target += delta;
+        applied.push(format!("{} {:+}", label, delta));
+    }
+}
+
+fn apply_money_delta(
+    target: &mut Money,
     value: Option<&&str>,
     applied: &mut Vec<String>,
     label: &str,
@@ -427,8 +503,8 @@ fn apply_delta_at(
     let Some(value) = value else {
         return;
     };
-    if let Ok(delta) = value.trim().parse::<i32>() {
-        *target += delta;
+    if let Ok(delta) = value.trim().parse::<i64>() {
+        *target = target.add(Money::from_dollars(delta));
         applied.push(format!("{} {:+}", label, delta));
     }
 }

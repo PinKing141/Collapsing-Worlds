@@ -3,33 +3,37 @@ use bevy_ecs::schedule::SystemSet;
 
 use crate::core::world::ActionQueue;
 use crate::core::world::IdAllocator;
+use crate::data::storylets::{load_storylet_catalog, Storylet};
 use crate::simulation::agents::{AgentEventLog, AgentRegistry};
-use crate::simulation::city::{CityEventLog, CityState};
 use crate::simulation::case::{CaseEventLog, CaseRegistry};
+use crate::simulation::city::{CityEventLog, CityState};
+use crate::simulation::civilian::CivilianState;
 use crate::simulation::evidence::WorldEvidence;
 use crate::simulation::identity_evidence::IdentityEvidenceStore;
-use crate::simulation::civilian::CivilianState;
-use crate::simulation::storylets::StoryletLibrary;
-use crate::simulation::storylet_state::StoryletState;
-use crate::simulation::pressure::PressureState;
-use crate::simulation::region::{RegionEventLog, RegionState};
-use crate::simulation::time::{advance_time_system, GameTime};
 use crate::simulation::nemesis::NemesisState;
-use crate::systems::combat::{combat_system, CombatLog};
+use crate::simulation::pressure::PressureState;
+use crate::simulation::region::{GlobalEventLog, RegionEventLog, RegionState};
+use crate::simulation::storylet_state::StoryletState;
+use crate::simulation::storylets::StoryletLibrary;
+use crate::simulation::time::{advance_time_system, GameTime};
 use crate::systems::case::case_progress_system;
 use crate::systems::civilian::civilian_system;
+use crate::systems::combat::{combat_system, CombatLog};
 use crate::systems::economy::economy_system;
 use crate::systems::event_resolver::{event_resolver_system, ResolvedFactionEventLog};
 use crate::systems::faction::{faction_director_system, FactionDirector, FactionEventLog};
-use crate::systems::heat::{heat_decay_system, signature_heat_system, update_active_location_system, WorldEventLog};
-use crate::systems::nemesis::{nemesis_system, NemesisDirector, NemesisEventLog};
+use crate::systems::heat::{
+    heat_decay_system, signature_heat_system, update_active_location_system, WorldEventLog,
+};
 use crate::systems::movement_system;
+use crate::systems::nemesis::{nemesis_system, NemesisDirector, NemesisEventLog};
 use crate::systems::persona::{persona_switch_system, PersonaEventLog};
 use crate::systems::pressure::pressure_system;
-use crate::systems::region::{global_faction_system, region_system, GlobalFactionDirector, GlobalFactionEventLog};
+use crate::systems::region::{
+    global_faction_system, region_system, GlobalFactionDirector, GlobalFactionEventLog,
+};
 use crate::systems::suspicion::suspicion_system;
 use crate::systems::units::unit_movement_system;
-use crate::data::storylets::{load_storylet_catalog, Storylet};
 
 /// Canonical tick ordering for the simulation.
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
@@ -66,6 +70,7 @@ pub fn create_world(_seed: u64) -> World {
     world.insert_resource(load_faction_director());
     world.insert_resource(GlobalFactionDirector::load_default());
     world.insert_resource(GlobalFactionEventLog::default());
+    world.insert_resource(GlobalEventLog::default());
     world.insert_resource(load_nemesis_director());
     world.insert_resource(load_storylets());
     world.insert_resource(StoryletState::default());
@@ -79,40 +84,42 @@ pub fn create_schedule() -> Schedule {
     let mut schedule = Schedule::default();
 
     schedule.configure_sets(
-        (TickSet::Intake, TickSet::Simulation, TickSet::Time, TickSet::Cleanup).chain(),
+        (
+            TickSet::Intake,
+            TickSet::Simulation,
+            TickSet::Time,
+            TickSet::Cleanup,
+        )
+            .chain(),
     );
 
-    schedule.add_systems(
-        (
-            movement_system.in_set(TickSet::Simulation),
-            economy_system.in_set(TickSet::Simulation),
-            suspicion_system.in_set(TickSet::Simulation),
-            update_active_location_system.in_set(TickSet::Simulation),
-            signature_heat_system.in_set(TickSet::Simulation),
-            persona_switch_system.in_set(TickSet::Simulation),
-            faction_director_system.in_set(TickSet::Simulation),
-            event_resolver_system.in_set(TickSet::Simulation),
-            case_progress_system.in_set(TickSet::Simulation),
-            nemesis_system
-                .in_set(TickSet::Simulation)
-                .after(case_progress_system)
-                .before(pressure_system),
-            unit_movement_system.in_set(TickSet::Simulation),
-            combat_system.in_set(TickSet::Simulation),
-            pressure_system.in_set(TickSet::Simulation),
-            civilian_system
-                .in_set(TickSet::Simulation)
-                .after(pressure_system),
-            heat_decay_system.in_set(TickSet::Time),
-            region_system
-                .in_set(TickSet::Time)
-                .after(heat_decay_system),
-            global_faction_system
-                .in_set(TickSet::Time)
-                .after(region_system),
-            advance_time_system.in_set(TickSet::Time),
-        ),
-    );
+    schedule.add_systems((
+        movement_system.in_set(TickSet::Simulation),
+        economy_system.in_set(TickSet::Simulation),
+        suspicion_system.in_set(TickSet::Simulation),
+        update_active_location_system.in_set(TickSet::Simulation),
+        signature_heat_system.in_set(TickSet::Simulation),
+        persona_switch_system.in_set(TickSet::Simulation),
+        faction_director_system.in_set(TickSet::Simulation),
+        event_resolver_system.in_set(TickSet::Simulation),
+        case_progress_system.in_set(TickSet::Simulation),
+        nemesis_system
+            .in_set(TickSet::Simulation)
+            .after(case_progress_system)
+            .before(pressure_system),
+        unit_movement_system.in_set(TickSet::Simulation),
+        combat_system.in_set(TickSet::Simulation),
+        pressure_system.in_set(TickSet::Simulation),
+        civilian_system
+            .in_set(TickSet::Simulation)
+            .after(pressure_system),
+        heat_decay_system.in_set(TickSet::Time),
+        region_system.in_set(TickSet::Time).after(heat_decay_system),
+        global_faction_system
+            .in_set(TickSet::Time)
+            .after(region_system),
+        advance_time_system.in_set(TickSet::Time),
+    ));
 
     schedule
 }
