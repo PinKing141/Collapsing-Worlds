@@ -1,6 +1,9 @@
 use bevy_ecs::prelude::*;
 
-use crate::simulation::economy::{clamp_liquidity, lifestyle_upkeep, EconomyTickResult, Wealth};
+use crate::simulation::economy::{
+    clamp_liquidity, default_liquidity_for_tier, lifestyle_upkeep, EconomyTickResult, Wealth,
+    WealthProfile,
+};
 use crate::simulation::time::GameTime;
 
 #[derive(Resource, Debug, Clone)]
@@ -9,6 +12,7 @@ pub struct CivilianState {
     pub job: CivilianJob,
     pub finances: CivilianFinances,
     pub wealth: Wealth,
+    pub wealth_profile: WealthProfile,
     pub social: SocialTies,
     pub reputation: ReputationTrack,
     pub rewards: CivilianRewards,
@@ -23,6 +27,7 @@ pub struct CivilianState {
     pub last_work_day: u32,
     pub last_relationship_day: u32,
     pub last_economy_day: u32,
+    pub last_job_offer_day: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +201,8 @@ const PROMOTION_COOLDOWN_DAYS: u32 = 5;
 const MAX_JOB_LEVEL: i32 = 6;
 const PART_TIME_LEVEL_CAP: i32 = 4;
 const INCOME_BOOST_CR: i64 = 25;
+const JOB_OFFER_COOLDOWN_DAYS: u32 = 14;
+const JOB_OFFER_UNEMPLOYED_COOLDOWN_DAYS: u32 = 7;
 
 impl Default for CivilianState {
     fn default() -> Self {
@@ -221,6 +228,7 @@ impl Default for CivilianState {
                 wage,
             },
             wealth,
+            wealth_profile: WealthProfile::Balanced,
             social: SocialTies {
                 support: 55,
                 strain: 10,
@@ -243,6 +251,7 @@ impl Default for CivilianState {
             last_work_day: 0,
             last_relationship_day: 0,
             last_economy_day: 0,
+            last_job_offer_day: 0,
         }
     }
 }
@@ -342,6 +351,10 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
         update_social_web(state);
         update_civilian_tier(state);
         update_network_rewards(state);
+        if should_queue_job_offer(state, time.day) {
+            queue_event(state, "civilian_job_offer", time.tick);
+            state.last_job_offer_day = time.day;
+        }
     }
 
     if matches!(state.job_status, JobStatus::Employed | JobStatus::PartTime)
@@ -380,6 +393,7 @@ pub fn tick_civilian_economy(
 pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> Vec<String> {
     let mut applied = Vec::new();
     let mut career_changed = false;
+    let mut job_status_changed = false;
     let mut wage_override = false;
     let mut cash_changed = false;
     let mut debt_changed = false;
@@ -426,6 +440,12 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                     "liquidity",
                 );
                 state.wealth.liquidity = clamp_liquidity(state.wealth.liquidity);
+            }
+            "wealth_profile" => {
+                if let Some(profile) = parts.get(1).and_then(|value| parse_wealth_profile(value)) {
+                    state.wealth_profile = profile;
+                    applied.push(format!("wealth profile -> {}", profile.label()));
+                }
             }
             "support" => {
                 apply_delta_at(&mut state.social.support, parts.get(1), &mut applied, "support");
@@ -521,6 +541,7 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
                     state.job_status = job;
                     applied.push(format!("job -> {:?}", job));
                     career_changed = true;
+                    job_status_changed = true;
                 }
             }
             "job_role" => {
@@ -625,6 +646,14 @@ pub fn apply_civilian_effects(state: &mut CivilianState, effects: &[String]) -> 
     }
     if matches!(state.job_status, JobStatus::Unemployed) {
         state.finances.wage = 0;
+    }
+    if career_changed
+        && !job_status_changed
+        && matches!(state.job_status, JobStatus::Unemployed)
+    {
+        state.job_status = JobStatus::Employed;
+        applied.push("job -> Employed".to_string());
+        sync_career_compensation(state);
     }
     if wealth_changed {
         sync_finances_from_wealth(state);
@@ -822,6 +851,21 @@ fn update_network_rewards(state: &mut CivilianState) {
     state.network_rewards = rewards;
 }
 
+fn should_queue_job_offer(state: &CivilianState, day: u32) -> bool {
+    let cooldown = if matches!(state.job_status, JobStatus::Unemployed) {
+        JOB_OFFER_UNEMPLOYED_COOLDOWN_DAYS
+    } else {
+        JOB_OFFER_COOLDOWN_DAYS
+    };
+    if day < state.last_job_offer_day.saturating_add(cooldown) {
+        return false;
+    }
+    if matches!(state.job_status, JobStatus::Unemployed) {
+        return true;
+    }
+    state.job.satisfaction < 55 || state.job.stability < 45
+}
+
 fn refresh_wealth_tier(state: &mut CivilianState) {
     state.wealth.refresh_tier(state.finances.debt as i64);
 }
@@ -829,9 +873,15 @@ fn refresh_wealth_tier(state: &mut CivilianState) {
 fn update_wealth_profile(state: &mut CivilianState) {
     let rewards = state.effective_rewards();
     let bonus_income = rewards.income_boost as i64 * INCOME_BOOST_CR;
-    state.wealth.income_per_tick = state.finances.wage as i64 + bonus_income;
-    state.wealth.upkeep_per_tick = lifestyle_upkeep(state.wealth.tier);
-    state.wealth.liquidity = clamp_liquidity(state.wealth.liquidity);
+    let base_income = state.finances.wage as i64 + bonus_income;
+    let modifiers = state.wealth_profile.modifiers();
+    state.wealth.income_per_tick = ((base_income as f32) * modifiers.income_scale).round() as i64;
+    let base_upkeep = lifestyle_upkeep(state.wealth.tier);
+    state.wealth.upkeep_per_tick =
+        ((base_upkeep as f32) * modifiers.upkeep_scale).round() as i64;
+    let base_liquidity = default_liquidity_for_tier(state.wealth.tier);
+    let liquidity = clamp_liquidity(base_liquidity + modifiers.liquidity_bonus);
+    state.wealth.liquidity = liquidity.min(clamp_liquidity(modifiers.liquidity_cap));
 }
 
 fn sync_finances_from_wealth(state: &mut CivilianState) {
@@ -1181,6 +1231,15 @@ fn parse_job_role(value: &str) -> Option<JobRole> {
         "plumber" => Some(JobRole::Plumber),
         "retail_manager" => Some(JobRole::RetailManager),
         "farmer" => Some(JobRole::Farmer),
+        _ => None,
+    }
+}
+
+fn parse_wealth_profile(value: &str) -> Option<WealthProfile> {
+    match value.to_ascii_lowercase().as_str() {
+        "balanced" => Some(WealthProfile::Balanced),
+        "vigilante" => Some(WealthProfile::Vigilante),
+        "corporate" => Some(WealthProfile::Corporate),
         _ => None,
     }
 }

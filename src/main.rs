@@ -222,7 +222,7 @@ fn main() {
     let endgame_events = load_endgame_event_library();
     let global_events = load_global_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -242,7 +242,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -624,8 +624,26 @@ fn main() {
                         );
                         apply_civilian_pressure(&civilian_state, &mut pressure);
                     }
+                    Some("profile") => {
+                        let Some(profile) = parts.next() else {
+                            println!("Usage: civilian profile <balanced|vigilante|corporate>");
+                            continue;
+                        };
+                        let effect = format!("wealth_profile:{}", profile);
+                        let applied = apply_civilian_effects(&mut civilian_state, &[effect]);
+                        if applied.is_empty() {
+                            println!("Unknown wealth profile: {}", profile);
+                            continue;
+                        }
+                        println!("Applied effects:");
+                        for entry in applied {
+                            println!("  {}", entry);
+                        }
+                        apply_civilian_pressure(&civilian_state, &mut pressure);
+                        apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
+                    }
                     Some(_) => {
-                        println!("Usage: civilian [events|resolve <event_id> <choice_id>]");
+                        println!("Usage: civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>]");
                     }
                 }
             }
@@ -1726,8 +1744,9 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         state.finances.wage
     );
     println!(
-        "  Wealth: tier={:?} net_worth={}CR liquidity={:.2} income={}CR upkeep={}CR",
+        "  Wealth: tier={:?} profile={} net_worth={}CR liquidity={:.2} income={}CR upkeep={}CR",
         state.wealth.tier,
+        state.wealth_profile.label(),
         state.net_worth_cr(),
         state.wealth.liquidity,
         state.wealth.income_per_tick,

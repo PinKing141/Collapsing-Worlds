@@ -43,6 +43,54 @@ impl WealthTier {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WealthProfile {
+    Balanced,
+    Vigilante,
+    Corporate,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WealthProfileModifiers {
+    pub income_scale: f32,
+    pub upkeep_scale: f32,
+    pub liquidity_bonus: f32,
+    pub liquidity_cap: f32,
+}
+
+impl WealthProfile {
+    pub fn label(self) -> &'static str {
+        match self {
+            WealthProfile::Balanced => "BALANCED",
+            WealthProfile::Vigilante => "VIGILANTE",
+            WealthProfile::Corporate => "CORPORATE",
+        }
+    }
+
+    pub fn modifiers(self) -> WealthProfileModifiers {
+        match self {
+            WealthProfile::Balanced => WealthProfileModifiers {
+                income_scale: 1.0,
+                upkeep_scale: 1.0,
+                liquidity_bonus: 0.0,
+                liquidity_cap: 1.0,
+            },
+            WealthProfile::Vigilante => WealthProfileModifiers {
+                income_scale: 1.0,
+                upkeep_scale: 1.4,
+                liquidity_bonus: 0.08,
+                liquidity_cap: 0.75,
+            },
+            WealthProfile::Corporate => WealthProfileModifiers {
+                income_scale: 1.15,
+                upkeep_scale: 0.8,
+                liquidity_bonus: -0.12,
+                liquidity_cap: 0.45,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Wealth {
     pub current_cr: i64,
@@ -86,10 +134,6 @@ impl Wealth {
     pub fn refresh_tier(&mut self, debt_cr: i64) -> WealthTier {
         let net = self.net_worth(debt_cr);
         self.tier = wealth_tier_for(net);
-        let default_liquidity = default_liquidity_for_tier(self.tier);
-        if self.liquidity > default_liquidity {
-            self.liquidity = default_liquidity;
-        }
         self.tier
     }
 

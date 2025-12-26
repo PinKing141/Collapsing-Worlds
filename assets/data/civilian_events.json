@@ -58,16 +58,354 @@
       "text_stub": "A recruiter calls with a new role that could put your career on a faster track, but it comes with longer hours.",
       "choices": [
         {
-          "id": "accept",
-          "text": "Take the offer and reset your priorities.",
+          "id": "lawyer",
+          "text": "Take the lawyer role.",
+          "effects": [
+            "job:employed",
+            "job_role:lawyer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "journalist",
+          "text": "Take the journalist role.",
           "effects": [
             "job:employed",
             "job_role:journalist",
-            "job_level:+1",
-            "wage:+10",
-            "career:+6",
-            "strain:+4",
-            "career_xp:+8"
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "chef",
+          "text": "Take the chef role.",
+          "effects": [
+            "job:employed",
+            "job_role:chef",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "photographer",
+          "text": "Take the photographer role.",
+          "effects": [
+            "job:employed",
+            "job_role:photographer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "scientist",
+          "text": "Take the scientist role.",
+          "effects": [
+            "job:employed",
+            "job_role:scientist",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "artist",
+          "text": "Take the artist role.",
+          "effects": [
+            "job:employed",
+            "job_role:artist",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "engineer",
+          "text": "Take the engineer role.",
+          "effects": [
+            "job:employed",
+            "job_role:engineer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "nurse",
+          "text": "Take the nurse role.",
+          "effects": [
+            "job:employed",
+            "job_role:nurse",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "teacher",
+          "text": "Take the teacher role.",
+          "effects": [
+            "job:employed",
+            "job_role:teacher",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "mechanic",
+          "text": "Take the mechanic role.",
+          "effects": [
+            "job:employed",
+            "job_role:mechanic",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "analyst",
+          "text": "Take the analyst role.",
+          "effects": [
+            "job:employed",
+            "job_role:analyst",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "contractor",
+          "text": "Take the contractor role.",
+          "effects": [
+            "job:employed",
+            "job_role:contractor",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "doctor",
+          "text": "Take the doctor role.",
+          "effects": [
+            "job:employed",
+            "job_role:doctor",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "firefighter",
+          "text": "Take the firefighter role.",
+          "effects": [
+            "job:employed",
+            "job_role:firefighter",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "police_officer",
+          "text": "Take the police officer role.",
+          "effects": [
+            "job:employed",
+            "job_role:police_officer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "electrician",
+          "text": "Take the electrician role.",
+          "effects": [
+            "job:employed",
+            "job_role:electrician",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "software_developer",
+          "text": "Take the software developer role.",
+          "effects": [
+            "job:employed",
+            "job_role:software_developer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "accountant",
+          "text": "Take the accountant role.",
+          "effects": [
+            "job:employed",
+            "job_role:accountant",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "pharmacist",
+          "text": "Take the pharmacist role.",
+          "effects": [
+            "job:employed",
+            "job_role:pharmacist",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "social_worker",
+          "text": "Take the social worker role.",
+          "effects": [
+            "job:employed",
+            "job_role:social_worker",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "architect",
+          "text": "Take the architect role.",
+          "effects": [
+            "job:employed",
+            "job_role:architect",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "pilot",
+          "text": "Take the pilot role.",
+          "effects": [
+            "job:employed",
+            "job_role:pilot",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "dentist",
+          "text": "Take the dentist role.",
+          "effects": [
+            "job:employed",
+            "job_role:dentist",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "paramedic",
+          "text": "Take the paramedic role.",
+          "effects": [
+            "job:employed",
+            "job_role:paramedic",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "plumber",
+          "text": "Take the plumber role.",
+          "effects": [
+            "job:employed",
+            "job_role:plumber",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "retail_manager",
+          "text": "Take the retail manager role.",
+          "effects": [
+            "job:employed",
+            "job_role:retail_manager",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
+          ]
+        },
+        {
+          "id": "farmer",
+          "text": "Take the farmer role.",
+          "effects": [
+            "job:employed",
+            "job_role:farmer",
+            "career:+4",
+            "job_satisfaction:+2",
+            "job_stability:+1",
+            "strain:+3",
+            "career_xp:+5"
           ]
         },
         {
