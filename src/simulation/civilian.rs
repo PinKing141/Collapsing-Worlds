@@ -1,5 +1,6 @@
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::simulation::economy::{
     clamp_liquidity, default_liquidity_for_tier, lifestyle_upkeep, EconomyTickResult, Wealth,
@@ -40,6 +41,12 @@ pub struct CivilianState {
     pub last_promotion_day: u32,
     pub contacts: Vec<Contact>,
     pub pending_events: Vec<CivilianEvent>,
+    #[serde(default)]
+    pub event_settings: CivilianEventSettings,
+    #[serde(default)]
+    pub auto_choices: AutoChoicePreferences,
+    #[serde(default)]
+    pub event_history: HashMap<String, u32>,
     pub last_day: u32,
     pub last_work_day: u32,
     pub last_relationship_day: u32,
@@ -531,6 +538,66 @@ pub struct CivilianEvent {
     pub contact_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CivilianEventCategory {
+    Work,
+    School,
+    Health,
+    Housing,
+    Social,
+    Opportunity,
+    Crime,
+    Routine,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CivilianEventSettings {
+    #[serde(default)]
+    pub suppress_repeat_days: u32,
+    #[serde(default)]
+    pub min_effect_magnitude: i32,
+    #[serde(default)]
+    pub muted_categories: Vec<CivilianEventCategory>,
+}
+
+impl Default for CivilianEventSettings {
+    fn default() -> Self {
+        Self {
+            suppress_repeat_days: 0,
+            min_effect_magnitude: 0,
+            muted_categories: Vec::new(),
+        }
+    }
+}
+
+impl CivilianEventSettings {
+    pub fn is_muted(&self, category: CivilianEventCategory) -> bool {
+        self.muted_categories.contains(&category)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoChoicePreferences {
+    #[serde(default)]
+    pub pay_rent_if_cash_at_least: Option<i32>,
+    #[serde(default)]
+    pub attend_school: bool,
+    #[serde(default)]
+    pub rest_if_sleep_debt_at_least: Option<i32>,
+}
+
+impl Default for AutoChoicePreferences {
+    fn default() -> Self {
+        Self {
+            pay_rent_if_cash_at_least: None,
+            attend_school: false,
+            rest_if_sleep_debt_at_least: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct CivilianPressure {
     pub temporal: f32,
@@ -609,6 +676,9 @@ impl Default for CivilianState {
             last_promotion_day: 0,
             contacts: Vec::new(),
             pending_events: Vec::new(),
+            event_settings: CivilianEventSettings::default(),
+            auto_choices: AutoChoicePreferences::default(),
+            event_history: HashMap::new(),
             last_day: 0,
             last_work_day: 0,
             last_relationship_day: 0,
@@ -636,6 +706,14 @@ impl CivilianState {
             return (0, 0);
         }
         (self.career_xp, promotion_threshold(self.job.level))
+    }
+
+    pub fn last_event_seen_day(&self, event_id: &str) -> Option<u32> {
+        self.event_history.get(event_id).copied()
+    }
+
+    pub fn mark_event_seen(&mut self, event_id: &str, day: u32) {
+        self.event_history.insert(event_id.to_string(), day);
     }
 
     pub fn pressure_targets(&self) -> CivilianPressure {
@@ -810,6 +888,9 @@ pub fn tick_civilian_life(state: &mut CivilianState, time: &GameTime) {
         state.finances.rent_due_in -= 1;
         if state.finances.rent_due_in <= 0 {
             queue_event(state, "civilian_rent_due", time.tick);
+        }
+        if should_queue_crime_opportunity(state) {
+            queue_event(state, "civilian_crime_quick_hit", time.tick);
         }
         update_housing_state(state, time);
         update_social_web(state);
@@ -1722,6 +1803,16 @@ fn legacy_achievements(state: &CivilianState) -> Vec<String> {
         out.push("Quiet life".to_string());
     }
     out
+}
+
+fn should_queue_crime_opportunity(state: &CivilianState) -> bool {
+    if state.life.age_years < 16 {
+        return false;
+    }
+    if state.finances.rent_due_in > 1 {
+        return false;
+    }
+    state.finances.cash < state.housing.rent
 }
 
 fn should_queue_job_offer(state: &CivilianState, day: u32) -> bool {

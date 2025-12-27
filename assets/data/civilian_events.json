@@ -5,6 +5,11 @@
       "id": "civilian_work_shift",
       "title": "The Morning Shift",
       "text_stub": "Your shift starts in an hour. The commute will cost time, but the pay keeps the bills in check.",
+      "details": [
+        "Shift length depends on schedule and commute.",
+        "Stress up, cash steady, stability protected.",
+        "Skipping saves time but erodes trust."
+      ],
       "choices": [
         {
           "id": "work",
@@ -98,6 +103,11 @@
       "id": "civilian_rent_due",
       "title": "Rent Is Due",
       "text_stub": "Your landlord is expecting payment. The deadline is today, and the ledger doesn't lie.",
+      "details": [
+        "Lease: monthly, late fees apply after a short grace.",
+        "Utilities: seasonal swings, small spikes possible.",
+        "Landlord mood: impatient, trust at stake."
+      ],
       "choices": [
         {
           "id": "pay",
@@ -114,6 +124,34 @@
             "support:-3",
             "housing_stability:-6"
           ]
+        }
+      ]
+    },
+    {
+      "id": "civilian_crime_quick_hit",
+      "title": "Quick Cash Offer",
+      "text_stub": "A low-stakes hustle could cover the gap this week. Fast cash, low planning, quiet risk.",
+      "details": [
+        "Setup: one-night job, payout today.",
+        "Heat: small now, but repeats add attention.",
+        "Contact: a fixer expects a favor later."
+      ],
+      "choices": [
+        {
+          "id": "take",
+          "text": "Take the quick hit and walk away clean.",
+          "effects": [
+            "cash:+40",
+            "obligation:+4",
+            "strain:+2",
+            "community:-2",
+            "contact:Rook:acquaintance:underground"
+          ]
+        },
+        {
+          "id": "pass",
+          "text": "Pass and keep your record clear.",
+          "effects": ["support:+1", "strain:-1"]
         }
       ]
     },
@@ -371,6 +409,11 @@
       "id": "civilian_relocation_offer",
       "title": "Relocation Offer",
       "text_stub": "Your housing situation is getting shaky. A move could stabilize things, but every option has tradeoffs.",
+      "details": [
+        "Move costs include deposit and a small fee.",
+        "Commute and safety shift with each option.",
+        "Cooldown locks the decision for a few weeks."
+      ],
       "choices": [
         {
           "id": "downsize",
@@ -403,6 +446,11 @@
       "id": "civilian_job_offer",
       "title": "A Better Offer",
       "text_stub": "A recruiter calls with a new role that could put your career on a faster track, but it comes with longer hours.",
+      "details": [
+        "Higher pay, longer hours, more visibility.",
+        "Early choice locks the path for a while.",
+        "Decline keeps balance but slows growth."
+      ],
       "choices": [
         {
           "id": "lawyer",
@@ -766,6 +814,11 @@
       "id": "civilian_deadline_crunch",
       "title": "Deadline Crunch",
       "text_stub": "Your team is behind schedule. Picking up extra work could stabilize your position, but it will drain you.",
+      "details": [
+        "Overtime boosts stability but spikes strain.",
+        "Limits protect energy but can slow momentum.",
+        "Short-term choice affects the next review."
+      ],
       "choices": [
         {
           "id": "push",
@@ -783,6 +836,11 @@
       "id": "civilian_side_gig",
       "title": "Side Gig Opportunity",
       "text_stub": "A freelance offer arrives. It could add income and contacts, but it will eat into your nights.",
+      "details": [
+        "Short-term cash, long-term fatigue.",
+        "Network gains depend on follow-through.",
+        "Late nights can raise stress quickly."
+      ],
       "choices": [
         {
           "id": "take",
@@ -809,6 +867,11 @@
       "id": "civilian_social_favor",
       "title": "Call in a Favor",
       "text_stub": "A friend asks for help with a delicate situation. Showing up could deepen the bond, but it may expose you.",
+      "details": [
+        "Favors deepen loyalty but raise obligation.",
+        "Visibility can lift media attention.",
+        "Declining preserves time but cools the bond."
+      ],
       "choices": [
         {
           "id": "show",
@@ -890,6 +953,11 @@
       "id": "civilian_safehouse_tip",
       "title": "Safehouse Tip",
       "text_stub": "A trusted neighbor offers a safe place to lay low if needed. It could reduce risk but also adds another obligation.",
+      "details": [
+        "Underground ties improve safety but add obligation.",
+        "Safehouse lowers exposure during heat spikes.",
+        "Turning it down keeps life simpler."
+      ],
       "choices": [
         {
           "id": "accept",

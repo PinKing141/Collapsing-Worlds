@@ -4,6 +4,7 @@
 - Content is read-only at runtime: `powers.db` (powers/expressions/acquisition/costs/signatures/text).
 - World state is mutable and save-scoped: `world.db` (heat, factions, cases, time, evidence, personas, story state).
 - No cross-writes: never write to `powers.db`, never store world state inside content tables.
+- Use UK Standard English.
 
 ## Dependency Rule (Inward Only)
 `ui → game → simulation → rules → domain → util`

@@ -15,6 +15,8 @@ pub struct CivilianStorylet {
     pub id: String,
     pub title: String,
     pub text_stub: String,
+    #[serde(default)]
+    pub details: Vec<String>,
     pub choices: Vec<CivilianChoice>,
     #[serde(default)]
     pub effects: Vec<String>,

@@ -17,6 +17,8 @@ pub struct GlobalEventDefinition {
     pub id: String,
     pub title: String,
     pub text_stub: String,
+    #[serde(default)]
+    pub details: Vec<String>,
     pub min_escalation: GlobalEscalation,
     #[serde(default)]
     pub max_escalation: Option<GlobalEscalation>,

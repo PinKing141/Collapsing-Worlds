@@ -25,8 +25,9 @@ use superhero_universe::simulation::agents::{
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
-    apply_civilian_effects, tick_civilian_economy, tick_civilian_life, CivilianEvent,
-    CivilianState, ContactDomain, RelationType,
+    apply_civilian_effects, tick_civilian_economy, tick_civilian_life, AutoChoicePreferences,
+    CivilianEvent, CivilianEventCategory, CivilianEventSettings, CivilianState, ContactDomain,
+    RelationType,
 };
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
@@ -55,7 +56,8 @@ use superhero_universe::simulation::origin::{
 };
 use superhero_universe::simulation::pressure::PressureState;
 use superhero_universe::simulation::region::{
-    tick_global_events, GlobalEventLog, GlobalEventState, RegionEventLog, RegionState,
+    tick_global_events, GlobalEventInstance, GlobalEventLog, GlobalEventState, RegionEventLog,
+    RegionState,
 };
 use superhero_universe::simulation::storylet_state::StoryletState;
 use superhero_universe::simulation::storylets::{
@@ -89,6 +91,7 @@ use superhero_universe::world::{WorldDb, WorldDbState, WorldRepository};
 
 const DEFAULT_PUNCTUATION_TURNS: i32 = 2;
 const DEFAULT_PUNCTUATION_COOLDOWN_TURNS: i32 = 3;
+const MAX_FAST_FORWARD_TICKS: u32 = 5000;
 
 fn main() {
     println!("Initializing Superhero Universe (Rules Debug)...");
@@ -233,7 +236,7 @@ fn main() {
     let endgame_events = load_endgame_event_library();
     let global_events = load_global_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -253,7 +256,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -704,16 +707,38 @@ fn main() {
                     None => {
                         print_civilian_status(&civilian_state, &game_time);
                         print_pending_civilian_events(
-                            &civilian_state,
+                            &mut civilian_state,
                             &civilian_events,
                             &game_time,
+                            false,
                         );
                     }
                     Some("events") => {
+                        let show_details = match parts.next().map(|value| value.to_lowercase()) {
+                            None => false,
+                            Some(value) if value == "detail" || value == "details" => true,
+                            Some(_) => {
+                                println!("Usage: civilian events [detail]");
+                                continue;
+                            }
+                        };
                         print_pending_civilian_events(
-                            &civilian_state,
+                            &mut civilian_state,
                             &civilian_events,
                             &game_time,
+                            show_details,
+                        );
+                    }
+                    Some("detail") | Some("details") => {
+                        let Some(event_id) = parts.next() else {
+                            println!("Usage: civilian detail <event_id>");
+                            continue;
+                        };
+                        print_civilian_event_detail(
+                            &mut civilian_state,
+                            &civilian_events,
+                            &game_time,
+                            event_id,
                         );
                     }
                     Some("resolve") => {
@@ -733,8 +758,154 @@ fn main() {
                             &mut pressure,
                             event_id,
                             choice_id,
+                            true,
                         );
                         apply_civilian_pressure(&civilian_state, &mut pressure);
+                    }
+                    Some("prefs") => {
+                        let sub = parts.next();
+                        match sub {
+                            None | Some("show") => {
+                                print_civilian_preferences(&civilian_state);
+                            }
+                            Some("reset") => {
+                                civilian_state.event_settings = CivilianEventSettings::default();
+                                civilian_state.auto_choices = AutoChoicePreferences::default();
+                                println!("Civilian prefs reset to defaults.");
+                            }
+                            Some("repeat") => {
+                                let Some(days_raw) = parts.next() else {
+                                    println!("Usage: civilian prefs repeat <days>");
+                                    continue;
+                                };
+                                let Ok(days) = days_raw.parse::<u32>() else {
+                                    println!("Invalid days: {}", days_raw);
+                                    continue;
+                                };
+                                civilian_state.event_settings.suppress_repeat_days = days;
+                                println!("Repeat suppression set to {} days.", days);
+                            }
+                            Some("min_effect") => {
+                                let Some(value_raw) = parts.next() else {
+                                    println!("Usage: civilian prefs min_effect <value>");
+                                    continue;
+                                };
+                                let Ok(value) = value_raw.parse::<i32>() else {
+                                    println!("Invalid value: {}", value_raw);
+                                    continue;
+                                };
+                                civilian_state.event_settings.min_effect_magnitude = value.max(0);
+                                println!(
+                                    "Min effect magnitude set to {}.",
+                                    civilian_state.event_settings.min_effect_magnitude
+                                );
+                            }
+                            Some("mute") => {
+                                let Some(category_raw) = parts.next() else {
+                                    println!("Usage: civilian prefs mute <category> [on|off]");
+                                    continue;
+                                };
+                                let Some(category) = parse_event_category(category_raw) else {
+                                    println!("Unknown category: {}", category_raw);
+                                    continue;
+                                };
+                                let enabled = match parts.next().map(|v| v.to_ascii_lowercase()) {
+                                    None => true,
+                                    Some(value) if value == "on" => true,
+                                    Some(value) if value == "off" => false,
+                                    Some(_) => {
+                                        println!("Usage: civilian prefs mute <category> [on|off]");
+                                        continue;
+                                    }
+                                };
+                                let muted = &mut civilian_state.event_settings.muted_categories;
+                                if enabled {
+                                    if !muted.contains(&category) {
+                                        muted.push(category);
+                                    }
+                                } else {
+                                    muted.retain(|entry| entry != &category);
+                                }
+                                println!(
+                                    "Muted {}: {}.",
+                                    event_category_label(category),
+                                    if enabled { "on" } else { "off" }
+                                );
+                            }
+                            Some("auto") => {
+                                let Some(rule) = parts.next() else {
+                                    println!("Usage: civilian prefs auto <rent|school|rest> <value|on|off>");
+                                    continue;
+                                };
+                                match rule.to_ascii_lowercase().as_str() {
+                                    "rent" => {
+                                        let Some(value_raw) = parts.next() else {
+                                            println!("Usage: civilian prefs auto rent <cash|off>");
+                                            continue;
+                                        };
+                                        if value_raw.eq_ignore_ascii_case("off") {
+                                            civilian_state.auto_choices.pay_rent_if_cash_at_least = None;
+                                            println!("Auto rent pay disabled.");
+                                            continue;
+                                        }
+                                        let Ok(value) = value_raw.parse::<i32>() else {
+                                            println!("Invalid cash value: {}", value_raw);
+                                            continue;
+                                        };
+                                        civilian_state.auto_choices.pay_rent_if_cash_at_least = Some(value.max(0));
+                                        println!(
+                                            "Auto rent pay set to cash >= {}.",
+                                            value.max(0)
+                                        );
+                                    }
+                                    "school" => {
+                                        let Some(value_raw) = parts.next() else {
+                                            println!("Usage: civilian prefs auto school <on|off>");
+                                            continue;
+                                        };
+                                        let enabled = match value_raw.to_ascii_lowercase().as_str() {
+                                            "on" => true,
+                                            "off" => false,
+                                            _ => {
+                                                println!("Usage: civilian prefs auto school <on|off>");
+                                                continue;
+                                            }
+                                        };
+                                        civilian_state.auto_choices.attend_school = enabled;
+                                        println!(
+                                            "Auto school attendance {}.",
+                                            if enabled { "enabled" } else { "disabled" }
+                                        );
+                                    }
+                                    "rest" => {
+                                        let Some(value_raw) = parts.next() else {
+                                            println!("Usage: civilian prefs auto rest <sleep_debt|off>");
+                                            continue;
+                                        };
+                                        if value_raw.eq_ignore_ascii_case("off") {
+                                            civilian_state.auto_choices.rest_if_sleep_debt_at_least = None;
+                                            println!("Auto rest disabled.");
+                                            continue;
+                                        }
+                                        let Ok(value) = value_raw.parse::<i32>() else {
+                                            println!("Invalid sleep debt value: {}", value_raw);
+                                            continue;
+                                        };
+                                        civilian_state.auto_choices.rest_if_sleep_debt_at_least = Some(value.max(0));
+                                        println!(
+                                            "Auto rest set to sleep_debt >= {}.",
+                                            value.max(0)
+                                        );
+                                    }
+                                    _ => {
+                                        println!("Usage: civilian prefs auto <rent|school|rest> <value|on|off>");
+                                    }
+                                }
+                            }
+                            Some(_) => {
+                                println!("Usage: civilian prefs [show|reset|repeat <days>|min_effect <value>|mute <category> [on|off]|auto <rent|school|rest> <value|on|off>]");
+                            }
+                        }
                     }
                     Some("profile") => {
                         let Some(profile) = parts.next() else {
@@ -755,7 +926,7 @@ fn main() {
                         apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
                     }
                     Some(_) => {
-                        println!("Usage: civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>]");
+                        println!("Usage: civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>]");
                     }
                 }
             }
@@ -764,10 +935,40 @@ fn main() {
                 match sub {
                     None => {
                         print_global_escalation(&region);
-                        print_pending_global_events(&global_event_state, &global_events, &game_time);
+                        print_pending_global_events(
+                            &global_event_state,
+                            &global_events,
+                            &game_time,
+                            false,
+                        );
                     }
                     Some("events") => {
-                        print_pending_global_events(&global_event_state, &global_events, &game_time);
+                        let show_details = match parts.next().map(|value| value.to_lowercase()) {
+                            None => false,
+                            Some(value) if value == "detail" || value == "details" => true,
+                            Some(_) => {
+                                println!("Usage: global events [detail]");
+                                continue;
+                            }
+                        };
+                        print_pending_global_events(
+                            &global_event_state,
+                            &global_events,
+                            &game_time,
+                            show_details,
+                        );
+                    }
+                    Some("detail") | Some("details") => {
+                        let Some(event_id) = parts.next() else {
+                            println!("Usage: global detail <event_id>");
+                            continue;
+                        };
+                        print_global_event_detail(
+                            &global_event_state,
+                            &global_events,
+                            &game_time,
+                            event_id,
+                        );
                     }
                     Some("resolve") => {
                         let Some(event_id) = parts.next() else {
@@ -790,7 +991,7 @@ fn main() {
                         apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
                     }
                     Some(_) => {
-                        println!("Usage: global [events|resolve <event_id> <choice_id>]");
+                        println!("Usage: global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>]");
                     }
                 }
             }
@@ -1243,45 +1444,189 @@ fn main() {
                 }
             }
             "tick" => {
-                let count = parts
-                    .next()
-                    .and_then(|v| v.parse::<u32>().ok())
-                    .unwrap_or(1);
-                let death_pending = tick_world(
-                    &mut world,
-                    &mut actor,
-                    &mut evidence,
-                    &mut identity_evidence,
-                    &mut city,
-                    &mut city_events,
-                    &mut faction_director,
-                    &mut faction_events,
-                    &mut resolved_faction_events,
-                    &mut cases,
-                    &mut case_log,
-                    &mut agents,
-                    &mut agent_events,
-                    &mut persona_stack,
-                    &storylets,
-                    alignment,
-                    &mut player_pos,
-                    &mut game_time,
+                let next = parts.next();
+                let tick_mode = match next {
+                    None => TickMode::Count(1),
+                    Some(raw) => {
+                        if let Ok(count) = raw.parse::<u32>() {
+                            TickMode::Count(count)
+                        } else {
+                            match raw.to_ascii_lowercase().as_str() {
+                                "next" => TickMode::NextEvent,
+                                "rent" => TickMode::NextRent,
+                                "crisis" => TickMode::CrisisOnly,
+                                "skip" => {
+                                    let days = parts
+                                        .next()
+                                        .and_then(|value| value.parse::<u32>().ok())
+                                        .unwrap_or(1)
+                                        .max(1);
+                                    TickMode::SkipDays(days)
+                                }
+                                _ => {
+                                    println!("Usage: tick [n|next|rent|crisis|skip [days]]");
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                };
+                let auto_mode = match tick_mode {
+                    TickMode::NextRent => AutoResolveMode::SkipRent,
+                    TickMode::CrisisOnly | TickMode::SkipDays(_) => AutoResolveMode::SkipCrises,
+                    TickMode::Count(_) | TickMode::NextEvent => AutoResolveMode::Normal,
+                };
+                let auto_resolved = auto_resolve_civilian_events(
                     &mut civilian_state,
-                    &mut storylet_state,
-                    &mut endgame_state,
-                    &mut pressure,
-                    &mut region,
-                    &mut region_events,
-                    &mut global_event_state,
-                    &mut global_event_log,
-                    &global_events,
-                    &mut global_faction_director,
-                    &mut global_faction_events,
+                    &civilian_events,
                     &mut origin_quest,
-                    &growth,
                     &origin_paths,
-                    count,
+                    &mut pressure,
+                    auto_mode,
                 );
+                if auto_resolved > 0 {
+                    apply_civilian_pressure(&civilian_state, &mut pressure);
+                    apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
+                }
+                let mut stop_reason = None;
+                if !matches!(tick_mode, TickMode::Count(_)) {
+                    stop_reason = match tick_mode {
+                        TickMode::NextRent if has_rent_due_pending(&civilian_state) => {
+                            Some(TickStopReason::RentDue)
+                        }
+                        TickMode::NextEvent
+                            if has_visible_pending_civilian_events(
+                                &civilian_state,
+                                &civilian_events,
+                                &game_time,
+                            ) || !global_event_state.pending.is_empty() =>
+                        {
+                            Some(TickStopReason::PendingEvent)
+                        }
+                        TickMode::CrisisOnly | TickMode::SkipDays(_)
+                            if has_crisis_pending(&civilian_state)
+                                || !global_event_state.pending.is_empty() =>
+                        {
+                            Some(TickStopReason::Crisis)
+                        }
+                        _ => None,
+                    };
+                }
+                let mut ticks_run = 0u32;
+                let mut death_pending = false;
+                if stop_reason.is_none() {
+                    let target_ticks = match tick_mode {
+                        TickMode::Count(count) => count,
+                        TickMode::SkipDays(days) => days.saturating_mul(24),
+                        _ => MAX_FAST_FORWARD_TICKS,
+                    };
+                    for _ in 0..target_ticks {
+                        let mut storylet_triggered = false;
+                        death_pending = tick_world(
+                            &mut world,
+                            &mut actor,
+                            &mut evidence,
+                            &mut identity_evidence,
+                            &mut city,
+                            &mut city_events,
+                            &mut faction_director,
+                            &mut faction_events,
+                            &mut resolved_faction_events,
+                            &mut cases,
+                            &mut case_log,
+                            &mut agents,
+                            &mut agent_events,
+                            &mut persona_stack,
+                            &storylets,
+                            &civilian_events,
+                            alignment,
+                            &mut player_pos,
+                            &mut game_time,
+                            &mut civilian_state,
+                            &mut storylet_state,
+                            &mut endgame_state,
+                            &mut pressure,
+                            &mut region,
+                            &mut region_events,
+                            &mut global_event_state,
+                            &mut global_event_log,
+                            &global_events,
+                            &mut global_faction_director,
+                            &mut global_faction_events,
+                            &mut origin_quest,
+                            &growth,
+                            &origin_paths,
+                            1,
+                            auto_mode,
+                            &mut storylet_triggered,
+                        );
+                        ticks_run += 1;
+                        if death_pending {
+                            stop_reason = Some(TickStopReason::Death);
+                            break;
+                        }
+                        match tick_mode {
+                            TickMode::Count(_) => {
+                                if ticks_run >= target_ticks {
+                                    stop_reason = Some(TickStopReason::Completed);
+                                    break;
+                                }
+                            }
+                            TickMode::NextRent => {
+                                if has_rent_due_pending(&civilian_state) {
+                                    stop_reason = Some(TickStopReason::RentDue);
+                                    break;
+                                }
+                            }
+                            TickMode::NextEvent => {
+                                if storylet_triggered {
+                                    stop_reason = Some(TickStopReason::Storylet);
+                                    break;
+                                }
+                                if has_visible_pending_civilian_events(
+                                    &civilian_state,
+                                    &civilian_events,
+                                    &game_time,
+                                ) || !global_event_state.pending.is_empty()
+                                {
+                                    stop_reason = Some(TickStopReason::PendingEvent);
+                                    break;
+                                }
+                            }
+                            TickMode::CrisisOnly => {
+                                if has_crisis_pending(&civilian_state)
+                                    || !global_event_state.pending.is_empty()
+                                {
+                                    stop_reason = Some(TickStopReason::Crisis);
+                                    break;
+                                }
+                            }
+                            TickMode::SkipDays(_) => {
+                                if has_crisis_pending(&civilian_state)
+                                    || !global_event_state.pending.is_empty()
+                                {
+                                    stop_reason = Some(TickStopReason::Crisis);
+                                    break;
+                                }
+                                if ticks_run >= target_ticks {
+                                    stop_reason = Some(TickStopReason::Completed);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if stop_reason.is_none() && !matches!(tick_mode, TickMode::Count(_)) {
+                        stop_reason = Some(TickStopReason::MaxTicks);
+                    }
+                }
+                if !matches!(tick_mode, TickMode::Count(_)) {
+                    let reason = stop_reason.unwrap_or(TickStopReason::Completed);
+                    println!(
+                        "Tick stop: {} ({} ticks).",
+                        tick_stop_reason_label(reason),
+                        ticks_run
+                    );
+                }
                 if death_pending {
                     process_civilian_death(
                         &mut actor,
@@ -2320,6 +2665,43 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
     );
 }
 
+fn print_civilian_preferences(state: &CivilianState) {
+    let settings = &state.event_settings;
+    let muted: Vec<&str> = settings
+        .muted_categories
+        .iter()
+        .map(|category| event_category_label(*category))
+        .collect();
+    let muted_label = if muted.is_empty() {
+        "none".to_string()
+    } else {
+        muted.join(", ")
+    };
+    let rent_auto = match state.auto_choices.pay_rent_if_cash_at_least {
+        Some(value) => format!("cash >= {}", value),
+        None => "off".to_string(),
+    };
+    let rest_auto = match state.auto_choices.rest_if_sleep_debt_at_least {
+        Some(value) => format!("sleep_debt >= {}", value),
+        None => "off".to_string(),
+    };
+    println!("Civilian prefs:");
+    println!(
+        "  Filters: repeat_suppress_days={} min_effect_magnitude={} muted=[{}]",
+        settings.suppress_repeat_days, settings.min_effect_magnitude, muted_label
+    );
+    println!(
+        "  Auto: rent_pay={} school_attend={} rest_if_sleep_debt={}",
+        rent_auto,
+        if state.auto_choices.attend_school {
+            "on"
+        } else {
+            "off"
+        },
+        rest_auto
+    );
+}
+
 fn contact_domain_label(domain: ContactDomain) -> &'static str {
     match domain {
         ContactDomain::Professional => "professional",
@@ -2338,6 +2720,130 @@ fn relation_type_label(relation_type: RelationType) -> &'static str {
         RelationType::Colleague => "colleague",
         RelationType::Peer => "peer",
     }
+}
+
+fn event_category_label(category: CivilianEventCategory) -> &'static str {
+    match category {
+        CivilianEventCategory::Work => "work",
+        CivilianEventCategory::School => "school",
+        CivilianEventCategory::Health => "health",
+        CivilianEventCategory::Housing => "housing",
+        CivilianEventCategory::Social => "social",
+        CivilianEventCategory::Opportunity => "opportunity",
+        CivilianEventCategory::Crime => "crime",
+        CivilianEventCategory::Routine => "routine",
+        CivilianEventCategory::Other => "other",
+    }
+}
+
+fn parse_event_category(value: &str) -> Option<CivilianEventCategory> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "work" => Some(CivilianEventCategory::Work),
+        "school" => Some(CivilianEventCategory::School),
+        "health" => Some(CivilianEventCategory::Health),
+        "housing" => Some(CivilianEventCategory::Housing),
+        "social" => Some(CivilianEventCategory::Social),
+        "opportunity" | "opp" => Some(CivilianEventCategory::Opportunity),
+        "crime" => Some(CivilianEventCategory::Crime),
+        "routine" => Some(CivilianEventCategory::Routine),
+        "other" => Some(CivilianEventCategory::Other),
+        _ => None,
+    }
+}
+
+fn event_category_for_id(event_id: &str) -> CivilianEventCategory {
+    match event_id {
+        "civilian_work_shift" => CivilianEventCategory::Work,
+        "civilian_school_day" => CivilianEventCategory::School,
+        "civilian_hobby_session" => CivilianEventCategory::Routine,
+        "civilian_health_checkin" => CivilianEventCategory::Health,
+        "civilian_rent_due" | "civilian_relocation_offer" => CivilianEventCategory::Housing,
+        "civilian_crime_quick_hit" => CivilianEventCategory::Crime,
+        "civilian_job_offer"
+        | "civilian_deadline_crunch"
+        | "civilian_side_gig"
+        | "civilian_mentor_session"
+        | "civilian_colleague_project" => CivilianEventCategory::Opportunity,
+        "civilian_relationship_checkin"
+        | "civilian_contact_checkin"
+        | "civilian_contact_family"
+        | "civilian_contact_mentor"
+        | "civilian_contact_colleague"
+        | "civilian_contact_romance"
+        | "civilian_contact_rival"
+        | "civilian_family_obligation"
+        | "civilian_romance_date"
+        | "civilian_rival_runin"
+        | "civilian_social_favor"
+        | "civilian_trust_test"
+        | "civilian_community_meeting"
+        | "civilian_civic_protest"
+        | "civilian_safehouse_tip" => CivilianEventCategory::Social,
+        _ => CivilianEventCategory::Other,
+    }
+}
+
+fn is_crisis_event_id(event_id: &str) -> bool {
+    matches!(
+        event_id,
+        "civilian_rent_due"
+            | "civilian_relocation_offer"
+            | "civilian_health_checkin"
+            | "civilian_crime_quick_hit"
+    )
+}
+
+fn effect_magnitude(effects: &[String]) -> i32 {
+    let mut total = 0i32;
+    for effect in effects {
+        for part in effect.split(':') {
+            if let Ok(value) = part.trim().parse::<i32>() {
+                total = total.saturating_add(value.abs());
+            }
+        }
+    }
+    total
+}
+
+fn event_effect_magnitude(def: &CivilianStorylet) -> i32 {
+    let base = effect_magnitude(&def.effects);
+    let choice_max = def
+        .choices
+        .iter()
+        .map(|choice| effect_magnitude(&choice.effects))
+        .max()
+        .unwrap_or(0);
+    base.saturating_add(choice_max)
+}
+
+fn should_show_civilian_event(
+    state: &CivilianState,
+    def: &CivilianStorylet,
+    event: &CivilianEvent,
+    time: &GameTime,
+) -> bool {
+    if is_crisis_event_id(&event.storylet_id) {
+        return true;
+    }
+    let settings = &state.event_settings;
+    let category = event_category_for_id(&event.storylet_id);
+    if settings.is_muted(category) && default_choice_for_event(&event.storylet_id).is_some() {
+        return false;
+    }
+    if settings.min_effect_magnitude > 0
+        && event_effect_magnitude(def) < settings.min_effect_magnitude
+    {
+        return false;
+    }
+    if settings.suppress_repeat_days > 0 {
+        if let Some(last_day) = state.last_event_seen_day(&def.id) {
+            let since = time.day.saturating_sub(last_day);
+            if since < settings.suppress_repeat_days {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn render_civilian_text(
@@ -2369,28 +2875,70 @@ fn expand_civilian_effects(
         .collect()
 }
 
-fn print_pending_civilian_events(
+fn print_civilian_event_details(
     state: &CivilianState,
+    event: &CivilianEvent,
+    def: &CivilianStorylet,
+) {
+    if def.details.is_empty() {
+        return;
+    }
+    println!("    details:");
+    for detail in &def.details {
+        let line = render_civilian_text(detail, state, event);
+        println!("      - {}", line);
+    }
+}
+
+fn print_civilian_event_entry(
+    state: &CivilianState,
+    event: &CivilianEvent,
+    def: &CivilianStorylet,
+    time: &GameTime,
+    show_details: bool,
+) {
+    let age = time.tick.saturating_sub(event.created_tick);
+    let title = render_civilian_text(&def.title, state, event);
+    let summary = render_civilian_text(&def.text_stub, state, event);
+    println!("  {} | {} | queued {} ticks ago", def.id, title, age);
+    println!("    {}", summary);
+    if show_details {
+        print_civilian_event_details(state, event, def);
+    }
+    for choice in &def.choices {
+        let text = render_civilian_text(&choice.text, state, event);
+        println!("    [{}] {}", choice.id, text);
+    }
+    if !show_details && !def.details.is_empty() {
+        println!("    (see more: civilian detail {})", def.id);
+    }
+}
+
+fn print_pending_civilian_events(
+    state: &mut CivilianState,
     library: &[CivilianStorylet],
     time: &GameTime,
+    show_details: bool,
 ) {
     if state.pending_events.is_empty() {
         println!("Civilian events: none");
         return;
     }
     println!("Civilian events:");
-    for event in &state.pending_events {
-        let age = time.tick.saturating_sub(event.created_tick);
+    let pending = state.pending_events.clone();
+    let mut suppressed = 0usize;
+    for event in &pending {
         match find_civilian_event(library, &event.storylet_id) {
             Some(def) => {
-                let title = render_civilian_text(&def.title, state, event);
-                println!("  {} | {} | queued {} ticks ago", def.id, title, age);
-                for choice in &def.choices {
-                    let text = render_civilian_text(&choice.text, state, event);
-                    println!("    [{}] {}", choice.id, text);
+                if !should_show_civilian_event(state, def, event, time) {
+                    suppressed += 1;
+                    continue;
                 }
+                print_civilian_event_entry(state, event, def, time, show_details);
+                state.mark_event_seen(&def.id, time.day);
             }
             None => {
+                let age = time.tick.saturating_sub(event.created_tick);
                 println!(
                     "  {} | (missing definition) | queued {} ticks ago",
                     event.storylet_id, age
@@ -2398,6 +2946,205 @@ fn print_pending_civilian_events(
             }
         }
     }
+    if suppressed > 0 {
+        println!("  (suppressed {} events by filters)", suppressed);
+    }
+}
+
+fn print_civilian_event_detail(
+    state: &mut CivilianState,
+    library: &[CivilianStorylet],
+    time: &GameTime,
+    event_id: &str,
+) {
+    let Some(event) = state
+        .pending_events
+        .iter()
+        .find(|event| event.storylet_id == event_id)
+    else {
+        println!("Civilian event not pending: {}", event_id);
+        return;
+    };
+    let Some(def) = find_civilian_event(library, event_id) else {
+        println!("Civilian event missing definition: {}", event_id);
+        return;
+    };
+    println!("Civilian event detail:");
+    print_civilian_event_entry(state, event, def, time, true);
+    state.mark_event_seen(&def.id, time.day);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoResolveMode {
+    Disabled,
+    Normal,
+    SkipRent,
+    SkipCrises,
+}
+
+fn auto_resolve_allowed(event_id: &str, mode: AutoResolveMode) -> bool {
+    match mode {
+        AutoResolveMode::Disabled => false,
+        AutoResolveMode::Normal => true,
+        AutoResolveMode::SkipRent => event_id != "civilian_rent_due",
+        AutoResolveMode::SkipCrises => !is_crisis_event_id(event_id),
+    }
+}
+
+fn default_choice_for_event(event_id: &str) -> Option<&'static str> {
+    match event_id {
+        "civilian_work_shift" => Some("work"),
+        "civilian_school_day" => Some("attend"),
+        _ => None,
+    }
+}
+
+fn select_auto_choice(
+    state: &CivilianState,
+    event_id: &str,
+) -> Option<&'static str> {
+    let category = event_category_for_id(event_id);
+    if state.event_settings.is_muted(category) {
+        if let Some(choice) = default_choice_for_event(event_id) {
+            return Some(choice);
+        }
+    }
+    match event_id {
+        "civilian_rent_due" => {
+            let threshold = state.auto_choices.pay_rent_if_cash_at_least?;
+            if state.finances.cash >= threshold && state.finances.cash >= state.finances.rent {
+                Some("pay")
+            } else {
+                None
+            }
+        }
+        "civilian_school_day" => {
+            if state.auto_choices.attend_school {
+                Some("attend")
+            } else {
+                None
+            }
+        }
+        "civilian_health_checkin" => {
+            let threshold = state.auto_choices.rest_if_sleep_debt_at_least?;
+            if state.health.sleep_debt >= threshold {
+                Some("rest")
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn auto_resolve_civilian_events(
+    state: &mut CivilianState,
+    library: &[CivilianStorylet],
+    origin_quest: &mut OriginQuestState,
+    origin_paths: &OriginPathCatalog,
+    pressure: &mut PressureState,
+    mode: AutoResolveMode,
+) -> usize {
+    if matches!(mode, AutoResolveMode::Disabled) || state.pending_events.is_empty() {
+        return 0;
+    }
+    let mut resolved = 0usize;
+    let mut index = 0usize;
+    while index < state.pending_events.len() {
+        let event_id = state.pending_events[index].storylet_id.clone();
+        if !auto_resolve_allowed(&event_id, mode) {
+            index += 1;
+            continue;
+        }
+        let Some(choice_id) = select_auto_choice(state, &event_id) else {
+            index += 1;
+            continue;
+        };
+        let Some(def) = find_civilian_event(library, &event_id) else {
+            index += 1;
+            continue;
+        };
+        if !def.choices.iter().any(|choice| choice.id == choice_id) {
+            index += 1;
+            continue;
+        }
+        resolve_civilian_event(
+            state,
+            library,
+            origin_quest,
+            origin_paths,
+            pressure,
+            &event_id,
+            choice_id,
+            false,
+        );
+        resolved += 1;
+    }
+    resolved
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TickMode {
+    Count(u32),
+    NextEvent,
+    NextRent,
+    CrisisOnly,
+    SkipDays(u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TickStopReason {
+    Completed,
+    PendingEvent,
+    RentDue,
+    Crisis,
+    Storylet,
+    Death,
+    MaxTicks,
+}
+
+fn tick_stop_reason_label(reason: TickStopReason) -> &'static str {
+    match reason {
+        TickStopReason::Completed => "completed",
+        TickStopReason::PendingEvent => "pending event",
+        TickStopReason::RentDue => "rent due",
+        TickStopReason::Crisis => "crisis",
+        TickStopReason::Storylet => "storylet",
+        TickStopReason::Death => "death",
+        TickStopReason::MaxTicks => "max ticks",
+    }
+}
+
+fn has_visible_pending_civilian_events(
+    state: &CivilianState,
+    library: &[CivilianStorylet],
+    time: &GameTime,
+) -> bool {
+    for event in &state.pending_events {
+        match find_civilian_event(library, &event.storylet_id) {
+            Some(def) => {
+                if should_show_civilian_event(state, def, event, time) {
+                    return true;
+                }
+            }
+            None => return true,
+        }
+    }
+    false
+}
+
+fn has_crisis_pending(state: &CivilianState) -> bool {
+    state
+        .pending_events
+        .iter()
+        .any(|event| is_crisis_event_id(&event.storylet_id))
+}
+
+fn has_rent_due_pending(state: &CivilianState) -> bool {
+    state
+        .pending_events
+        .iter()
+        .any(|event| event.storylet_id == "civilian_rent_due")
 }
 
 fn resolve_civilian_event(
@@ -2408,9 +3155,12 @@ fn resolve_civilian_event(
     pressure: &mut PressureState,
     event_id: &str,
     choice_id: &str,
+    announce: bool,
 ) {
     let Some(event_def) = find_civilian_event(library, event_id) else {
-        println!("Unknown civilian event: {}", event_id);
+        if announce {
+            println!("Unknown civilian event: {}", event_id);
+        }
         return;
     };
     let pending_event = state
@@ -2428,7 +3178,9 @@ fn resolve_civilian_event(
         .iter()
         .find(|choice| choice.id == choice_id)
     else {
-        println!("Unknown choice {} for event {}", choice_id, event_id);
+        if announce {
+            println!("Unknown choice {} for event {}", choice_id, event_id);
+        }
         return;
     };
     let event_effects = expand_civilian_effects(&event_def.effects, state, &pending_event);
@@ -2450,21 +3202,24 @@ fn resolve_civilian_event(
     {
         state.pending_events.remove(index);
     }
-    println!("Resolved {} -> {}", event_def.title, choice.text);
-    if applied.is_empty() {
-        println!("No civilian effects applied.");
-    } else {
-        println!("Applied effects:");
-        for entry in applied {
-            println!("  {}", entry);
+    if announce {
+        println!("Resolved {} -> {}", event_def.title, choice.text);
+        if applied.is_empty() {
+            println!("No civilian effects applied.");
+        } else {
+            println!("Applied effects:");
+            for entry in applied {
+                println!("  {}", entry);
+            }
+        }
+        if !origin_effects.messages.is_empty() {
+            println!("Origin updates:");
+            for entry in origin_effects.messages {
+                println!("  {}", entry);
+            }
         }
     }
-    if !origin_effects.messages.is_empty() {
-        println!("Origin updates:");
-        for entry in origin_effects.messages {
-            println!("  {}", entry);
-        }
-    }
+    state.mark_event_seen(event_id, state.last_day);
     apply_origin_rewards(origin_effects.rewards.as_slice(), pressure);
 }
 
@@ -3075,6 +3830,7 @@ fn tick_world(
     agent_events: &mut AgentEventLog,
     persona_stack: &mut PersonaStack,
     storylets: &StoryletLibrary,
+    civilian_events: &[CivilianStorylet],
     alignment: Alignment,
     position: &mut Position,
     game_time: &mut GameTime,
@@ -3093,6 +3849,8 @@ fn tick_world(
     growth: &GrowthState,
     origin_paths: &OriginPathCatalog,
     turns: u32,
+    auto_mode: AutoResolveMode,
+    storylet_triggered: &mut bool,
 ) -> bool {
     let mut agent_event_log = WorldEventLog::default();
     let mut death_pending = false;
@@ -3121,6 +3879,14 @@ fn tick_world(
         }
         tick_civilian_economy(civilian_state, game_time);
         apply_tech_capability(actor, civilian_state);
+        auto_resolve_civilian_events(
+            civilian_state,
+            civilian_events,
+            origin_quest,
+            origin_paths,
+            pressure,
+            auto_mode,
+        );
         storylet_state.tick();
         let rewards = tick_origin_path(origin_quest, origin_paths);
         apply_origin_rewards(rewards.as_slice(), pressure);
@@ -3198,6 +3964,7 @@ fn tick_world(
                 "Storylet triggered: {} | {}",
                 storylet.id, storylet.text_stub
             );
+            *storylet_triggered = true;
         }
         run_region_update(region, city, pressure, city_events, region_events);
         tick_global_events(
@@ -3390,6 +4157,7 @@ fn print_pending_global_events(
     state: &GlobalEventState,
     catalog: &[GlobalEventDefinition],
     time: &GameTime,
+    show_details: bool,
 ) {
     if state.pending.is_empty() {
         println!("Global events: none");
@@ -3397,15 +4165,12 @@ fn print_pending_global_events(
     }
     println!("Global events:");
     for event in &state.pending {
-        let age = time.tick.saturating_sub(event.created_tick);
         match find_global_event(catalog, &event.event_id) {
             Some(def) => {
-                println!("  {} | {} | queued {} ticks ago", def.id, def.title, age);
-                for choice in &def.choices {
-                    println!("    [{}] {}", choice.id, choice.text);
-                }
+                print_global_event_entry(event, def, time, show_details);
             }
             None => {
+                let age = time.tick.saturating_sub(event.created_tick);
                 println!(
                     "  {} | (missing definition) | queued {} ticks ago",
                     event.event_id, age
@@ -3413,6 +4178,51 @@ fn print_pending_global_events(
             }
         }
     }
+}
+
+fn print_global_event_entry(
+    event: &GlobalEventInstance,
+    def: &GlobalEventDefinition,
+    time: &GameTime,
+    show_details: bool,
+) {
+    let age = time.tick.saturating_sub(event.created_tick);
+    println!("  {} | {} | queued {} ticks ago", def.id, def.title, age);
+    println!("    {}", def.text_stub);
+    if show_details && !def.details.is_empty() {
+        println!("    details:");
+        for detail in &def.details {
+            println!("      - {}", detail);
+        }
+    }
+    for choice in &def.choices {
+        println!("    [{}] {}", choice.id, choice.text);
+    }
+    if !show_details && !def.details.is_empty() {
+        println!("    (see more: global detail {})", def.id);
+    }
+}
+
+fn print_global_event_detail(
+    state: &GlobalEventState,
+    catalog: &[GlobalEventDefinition],
+    time: &GameTime,
+    event_id: &str,
+) {
+    let Some(event) = state
+        .pending
+        .iter()
+        .find(|event| event.event_id == event_id)
+    else {
+        println!("Global event not pending: {}", event_id);
+        return;
+    };
+    let Some(def) = find_global_event(catalog, event_id) else {
+        println!("Global event missing definition: {}", event_id);
+        return;
+    };
+    println!("Global event detail:");
+    print_global_event_entry(event, def, time, true);
 }
 
 fn print_cast(characters: &[PersistentCharacter]) {

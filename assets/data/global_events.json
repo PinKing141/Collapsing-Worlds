@@ -5,6 +5,11 @@
       "id": "global_tense_signals",
       "title": "Signal Noise",
       "text_stub": "Telemetry stations report rising anomaly noise. Analysts disagree on whether it is a false alarm or the start of a pattern.",
+      "details": [
+        "Sensor noise rising across multiple regions.",
+        "Quiet probes reduce panic but drain resources.",
+        "Public briefings trade trust for scrutiny."
+      ],
       "min_escalation": "TENSE",
       "max_escalation": "CRISIS",
       "cooldown_days": 2,
@@ -27,6 +32,11 @@
       "id": "global_crisis_ripple",
       "title": "Crisis Ripple",
       "text_stub": "A chain of coordinated incidents stretches response teams across multiple regions.",
+      "details": [
+        "Response teams stretched thin across districts.",
+        "Deploy stabilizes risk but drains resources.",
+        "Delegation buys intelligence time."
+      ],
       "min_escalation": "CRISIS",
       "cooldown_days": 3,
       "tags": ["CRISIS", "COORDINATED"],
@@ -48,6 +58,11 @@
       "id": "global_cosmic_breach",
       "title": "Cosmic Breach",
       "text_stub": "A breach opens beyond the atmosphere, warping physics in the upper sky.",
+      "details": [
+        "Physics distortions spreading at high altitude.",
+        "Sealing prioritizes safety but burns resources.",
+        "Study improves insight but raises exposure."
+      ],
       "min_escalation": "COSMIC",
       "cooldown_days": 4,
       "tags": ["COSMIC"],
