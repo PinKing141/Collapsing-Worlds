@@ -1,0 +1,143 @@
+Powers with tier:apex
+Count: 35
+
+- 668: Altering Reality
+  Overview: You can rewrite reality within a limited area.
+  Tags: kind:generic, domain:reality, tier:apex, alteration, reality, rewrite, warp
+
+- 2946: Alternate Synchronization
+  Overview: You can have the knowledge of every alternate reality version of yourself on demand!
+  Tags: kind:generic, domain:time, tier:apex, alternate, byakuran, continuity, omniscience, synchronization
+
+- 838: Backwards Reality
+  Overview: You can manipulate/change reality by saying sentences backwards!
+  Tags: kind:generic, domain:reality, tier:apex, backwards, reality manipulation, words
+
+- 1881: Cross Dimensional Awareness
+  Overview: You can view alternate dimensions, realities, futures!
+  Tags: kind:generic, domain:reality, domain:space, tier:apex, alternate, dimensions, multiverse, omniverse, precognition, reality, telepathy
+
+- 810: Deus Ex Machina
+  Overview: You can produce a "miracle" to get you out of an impossible situation!
+  Tags: kind:generic, domain:divine, domain:reality, tier:apex, god from the machine, miracle, reality bending
+
+- 500: Genie
+  Overview: You can grant reality-warping "wishes"!
+  Tags: kind:generic, domain:divine, domain:reality, tier:apex, aladdin, demi-god, magic, reality warp, wish
+
+- 191: Geometry
+  Overview: You can manipulate reality in immediate area!
+  Tags: kind:generic, domain:reality, domain:space, tier:apex, 3-dimensional graph, geometry, reality manipulation
+
+- 1113: Hgc Correlation
+  Overview: You can control events looking through your handheld game console!
+  Tags: kind:generic, domain:reality, tier:apex, beat 'em up, platform, precognition, reality warping
+
+- 1180: Inkheart
+  Overview: You can read aloud from something written and make the characters or objects from the writing come to life!
+  Tags: kind:generic, domain:reality, tier:apex, inkheart, read, reality manipulation
+
+- 186: Mastery
+  Overview: You can cONTROL EVERYTHING!
+  Tags: kind:skill, domain:reality, tier:apex, control, power, reality controling
+
+- 715: Omnikinesis
+  Overview: You can control everything that ever was, is, or will be!
+  Tags: kind:generic, tier:apex, kinesis, omni, omnikinesis
+
+- 2803: Omniperson
+  Overview: You can be everyone and everything!
+  Tags: kind:generic, tier:apex, omniperson, omnipotence, omnipresence
+
+- 539: Omnipotence
+  Overview: You can have and control any and every power!
+  Tags: kind:generic, tier:apex, anything, everything, omni, power, super
+
+- 2019: Omnipotent Ganger
+  Overview: You can use double ganger in it's most godlike form!
+  Tags: kind:generic, domain:divine, tier:apex, clone, clones, double, ganger, godlike, million, omnipotent
+
+- 2999: Omnipotent Power Mimicry
+  Overview: You can have every power in the world!
+  Tags: kind:generic, tier:apex, every, omnipotent, one, world
+
+- 1590: Omnipower
+  Overview: You can have every power!
+  Tags: kind:generic, tier:apex, all powerful, devine, immortal, unfair, unstopible
+
+- 839: Omnipresence
+  Overview: You can see everything happening anywhere!
+  Tags: kind:generic, tier:apex, clairvoyance, mental ability, omnipresence
+
+- 1367: Omniscience
+  Overview: You can know everything and everything, like God!
+  Tags: kind:generic, domain:divine, tier:apex, god, most powerful, omniscience
+
+- 395: Possibility Manipulation
+  Overview: You can take skills from parallel yous!
+  Tags: kind:generic, tier:apex, alternate universe, gain powers, parallel
+
+- 885: Pseudo Supernatural Magic
+  Overview: You can manipulate the forces of alternate or futuristic science!
+  Tags: kind:generic, domain:reality, tier:apex, levitation, omnipotence, reality, reproduction, shape, size
+
+- 1924: Q Power
+  Overview: You can have the power of the Q, from Star Trek!
+  Tags: kind:generic, tier:apex, balance, continuum, omnipotent, order, patrick stewart, q, star trek
+
+- 1076: Reality Control
+  Overview: You can reshape matter and energy!
+  Tags: kind:generic, domain:reality, tier:apex, omnipotent, reality, warping
+
+- 767: Reality Manipulation
+  Overview: You can manipulate the fabric of reality!
+  Tags: kind:generic, domain:reality, tier:apex, anything, manipulation, reality
+
+- 1002: Reality Warper
+  Overview: You can unlimited control of reality, matter, energy, time, dimensions, everything!
+  Tags: kind:generic, domain:reality, domain:space, tier:apex, advanced, dimension, extreme, higher, reality, ultimate, warping
+
+- 2563: Room To Tardis
+  Overview: You can transform a room into a time, space, and dimension vehicle!
+  Tags: kind:generic, domain:space, domain:time, tier:apex, alternate, dimension, machine, parallel, space, teleport, time, timeline, transport, universe, vehicle
+
+- 2157: Rrm
+  Overview: You can control everything same & different in everyday life!
+  Tags: kind:generic, domain:reality, tier:apex, fast forward, pause, reality warping, rewind, skip, slow motion, universe
+
+- 674: Technological Omniscience
+  Overview: You can use any technology via touch!
+  Tags: kind:generic, tier:apex, manipulation, omniscience, technology
+
+- 173: Telepathic Projection
+  Overview: You can create anything you think or dream into reality!
+  Tags: kind:generic, domain:reality, tier:apex, ability control, reality warping, telepath
+
+- 669: Thought Reality
+  Overview: You can manifest thought-forms, not full reality rewrites.
+  Tags: kind:generic, tier:apex, construct, imagination, limited, thoughtform
+
+- 3156: Time Merge
+  Overview: You can combine two or three decades!
+  Tags: kind:generic, domain:reality, domain:space, domain:time, tier:apex, inter-dimensional, merging, reality warping, time-travel
+
+- 2031: Total Remote Viewing
+  Overview: You can use remote viewing in its strongest form!
+  Tags: kind:generic, tier:apex, past, present, remote, supreme, total, universe, viewing
+
+- 796: Trousers Of Doom
+  Overview: You can store anything in your pockets!
+  Tags: kind:generic, tier:apex, doctor doctor, pants, picky picky pockets, trousers, universe, void
+
+- 103: Universe Control
+  Overview: You can create black holes and control the universe's celestial objects!
+  Tags: kind:generic, tier:apex, constellation, planets, sky, star, sun, universe
+
+- 1563: Universiokinesis
+  Overview: You can control the Universe, the Planets, the Sun, Black Holes, etc!
+  Tags: kind:generic, tier:apex, kinesis, planets, solar system, sun, universe
+
+- 1954: Void Blast
+  Overview: You can create portals to other dimensions and universes!
+  Tags: kind:generic, domain:space, tier:apex, dimensions, fun, portals, universes
+

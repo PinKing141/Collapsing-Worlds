@@ -1,0 +1,39 @@
+Powers with gene:nexa1
+Count: 9
+
+- 718: Bone Claws
+  Overview: You can make unbreakable bone claws come out of your saces between your knuckles!
+  Tags: kind:generic, gene:nexa1, bone, claws, mutant
+
+- 686: Cerebropathy
+  Overview: You can detect and communicate with super-powered mutants with X-genes or Genetic Engineering!
+  Tags: kind:generic, gene:nexa1, cerebro, mutants, telepathy
+
+- 2054: Mutant
+  Overview: You can be a mutant!
+  Tags: kind:generic, gene:nexa1, disfigured, muscle, mutant, speed, strong
+
+- 760: Mutant Bonding
+  Overview: You can bond and communicate with mutants with genetic mutation grants them superhuman features/abilities!
+  Tags: kind:generic, gene:nexa1, bond, friends, mutants
+
+- 682: Mutant Pact
+  Overview: You can bond with mutants with superhuman powers and able to communicate with them to some degree!
+  Tags: kind:package, gene:nexa1, bonding, friends, mutant
+
+- 755: Mutant Physiology
+  Overview: You can understand mutant's biological heritage, which may give them certain advantages over humans!
+  Tags: kind:generic, gene:nexa1, knowledge, mutants, physiology
+
+- 3158: Sonic Control
+  Overview: You can complete control over sound!
+  Tags: kind:generic, gene:nexa1, contol, mutant, sound
+
+- 761: X Gene Activation
+  Overview: You can activate x-genes that grants them superhuman features and abilities!
+  Tags: kind:generic, gene:nexa1, activation, genes, mutants
+
+- 2134: X Men
+  Overview: You can possess/control up to 3 superpowers that any mutant from the x-men movies, comics, and series have!
+  Tags: kind:generic, gene:nexa1, mutants, powers, x-men
+
