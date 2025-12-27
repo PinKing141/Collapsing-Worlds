@@ -9,7 +9,8 @@ use crate::components::combat::Health;
 use crate::components::faction::Faction;
 use crate::components::identity::{CivilianIdentity, Name, SuperIdentity};
 use crate::components::persona::{
-    hero_persona_stack, vigilante_persona_stack, villain_persona_stack, Alignment, PersonaStack,
+    hero_persona_stack, neutral_persona_stack, vigilante_persona_stack, villain_persona_stack,
+    Alignment, PersonaStack,
 };
 use crate::components::world::{EntityId, Player, Position};
 use crate::core::world::IdAllocator;
@@ -330,8 +331,9 @@ pub fn apply_state_to_world(state: SaveState, world: &mut World, player: Entity)
     }
 
     if state.player.persona_stack.is_none() {
-        let alignment = state.player.alignment.unwrap_or(Alignment::Hero);
+        let alignment = state.player.alignment.unwrap_or(Alignment::Neutral);
         let default_stack = match alignment {
+            Alignment::Neutral => neutral_persona_stack(),
             Alignment::Hero => hero_persona_stack(),
             Alignment::Vigilante => vigilante_persona_stack(),
             Alignment::Villain => villain_persona_stack(),

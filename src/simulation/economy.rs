@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 pub const CURRENCY_CODE: &str = "CR";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WealthTier {
     Destitute,
     Poor,
@@ -43,7 +45,7 @@ impl WealthTier {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WealthProfile {
     Balanced,
     Vigilante,
@@ -91,7 +93,7 @@ impl WealthProfile {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Wealth {
     pub current_cr: i64,
     pub tier: WealthTier,

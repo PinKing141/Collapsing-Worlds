@@ -77,6 +77,7 @@ pub struct PersonaSuspicion {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Alignment {
+    Neutral,
     Hero,
     Vigilante,
     Villain,
@@ -122,6 +123,12 @@ impl PersonaStack {
 impl Alignment {
     pub fn suspicion_multiplier(self) -> RiskModifiers {
         match self {
+            Alignment::Neutral => RiskModifiers {
+                public_suspicion: 1.0,
+                civilian_suspicion: 1.0,
+                wanted_level: 1.0,
+                exposure_risk: 1.0,
+            },
             Alignment::Hero => RiskModifiers {
                 public_suspicion: 1.0,
                 civilian_suspicion: 1.1,
@@ -142,6 +149,22 @@ impl Alignment {
             },
         }
     }
+}
+
+pub fn neutral_persona_stack() -> PersonaStack {
+    let mut stack = hero_persona_stack();
+    stack.personas.retain(|persona| persona.persona_type == PersonaType::Civilian);
+    if let Some(civilian) = stack.personas.get_mut(0) {
+        civilian.label = "Civilian".to_string();
+        civilian.risk_modifiers = RiskModifiers {
+            public_suspicion: 1.0,
+            civilian_suspicion: 1.0,
+            wanted_level: 1.0,
+            exposure_risk: 1.0,
+        };
+    }
+    stack.active_persona_id = "civilian".to_string();
+    stack
 }
 
 pub fn hero_persona_stack() -> PersonaStack {
@@ -235,14 +258,14 @@ pub fn vigilante_persona_stack() -> PersonaStack {
 
 pub fn villain_persona_stack() -> PersonaStack {
     let mut stack = hero_persona_stack();
-    stack.personas.retain(|persona| persona.persona_type == PersonaType::Masked);
-    if let Some(masked) = stack.personas.get_mut(0) {
-        masked.label = "Villain".to_string();
-        masked.risk_modifiers.public_suspicion = 0.9;
-        masked.risk_modifiers.wanted_level = 1.3;
-        masked.risk_modifiers.exposure_risk = 0.8;
+    for persona in stack.personas.iter_mut() {
+        if persona.persona_type == PersonaType::Masked {
+            persona.label = "Villain".to_string();
+            persona.risk_modifiers.public_suspicion = 0.9;
+            persona.risk_modifiers.wanted_level = 1.3;
+            persona.risk_modifiers.exposure_risk = 0.8;
+        }
     }
-    stack.active_persona_id = "masked".to_string();
     stack
 }
 

@@ -10,6 +10,7 @@ use crate::simulation::city::{CityState, LocationId};
 use crate::simulation::time::GameTime;
 
 const DEFAULT_AGENTS_PATH: &str = "./assets/data/agents.json";
+const DAYS_PER_YEAR: u32 = 336;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentCatalog {
@@ -39,6 +40,12 @@ pub struct AgentTemplate {
     pub haunt_location: u32,
     #[serde(default)]
     pub move_interval: u64,
+    #[serde(default)]
+    pub age_years: Option<u32>,
+    #[serde(default)]
+    pub age_min: Option<u32>,
+    #[serde(default)]
+    pub age_max: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +78,8 @@ pub struct AgentState {
     pub schedule: AgentSchedule,
     pub current_location: LocationId,
     pub last_incident_tick: u64,
+    pub age_years: u32,
+    pub birth_day: u32,
 }
 
 #[derive(Resource, Debug, Default, Clone)]
@@ -147,6 +156,7 @@ impl AgentRegistry {
             } else {
                 4
             };
+            let age_years = resolve_agent_age_years(&template, idx as u32);
             let target_location = default_target_location(home_location, haunt_location, 0);
             let agent = Agent {
                 id: (idx as u32) + 1,
@@ -171,6 +181,8 @@ impl AgentRegistry {
                 schedule,
                 current_location: home_location,
                 last_incident_tick: 0,
+                age_years,
+                birth_day: 0,
             });
         }
 
@@ -187,6 +199,7 @@ pub fn tick_agents(
     events.0.clear();
 
     for state in registry.agents.iter_mut() {
+        update_agent_age(state, time.day);
         let target_location = default_target_location(
             state.schedule.home_location,
             state.schedule.haunt_location,
@@ -251,5 +264,30 @@ fn default_target_location(home: LocationId, haunt: LocationId, hour: u8) -> Loc
         haunt
     } else {
         home
+    }
+}
+
+fn resolve_agent_age_years(template: &AgentTemplate, seed: u32) -> u32 {
+    if let Some(age) = template.age_years {
+        return age.max(18);
+    }
+    let min_age = template.age_min.unwrap_or(24).max(18);
+    let max_age = template.age_max.unwrap_or(55).max(min_age);
+    if max_age == min_age {
+        return min_age;
+    }
+    let span = max_age - min_age;
+    let offset = seed % (span + 1);
+    min_age + offset
+}
+
+fn update_agent_age(state: &mut AgentState, current_day: u32) {
+    if state.birth_day == 0 {
+        let offset = state.age_years.saturating_mul(DAYS_PER_YEAR);
+        state.birth_day = current_day.saturating_sub(offset);
+    }
+    while current_day >= state.birth_day.saturating_add(DAYS_PER_YEAR) {
+        state.birth_day = state.birth_day.saturating_add(DAYS_PER_YEAR);
+        state.age_years = state.age_years.saturating_add(1);
     }
 }

@@ -28,7 +28,8 @@
       "role_id": "courier",
       "home_location": 2,
       "haunt_location": 1,
-      "move_interval": 3
+      "move_interval": 3,
+      "age_years": 26
     },
     {
       "id": "agent_fixer_south",
@@ -36,7 +37,8 @@
       "role_id": "fixer",
       "home_location": 3,
       "haunt_location": 4,
-      "move_interval": 5
+      "move_interval": 5,
+      "age_years": 38
     }
   ]
 }

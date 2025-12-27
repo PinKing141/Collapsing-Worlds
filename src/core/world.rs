@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use crate::components::combat::Health;
 use crate::components::faction::Faction;
 use crate::components::identity::{CivilianIdentity, Name, SuperIdentity};
-use crate::components::persona::{hero_persona_stack, Alignment};
+use crate::components::persona::{neutral_persona_stack, Alignment};
 use crate::components::world::{EntityId, Player, Position};
 use crate::core::ecs::{create_schedule, create_world};
 use crate::core::serialization::{
@@ -155,7 +155,7 @@ fn allocate_entity_id(world: &mut World) -> u32 {
 }
 
 fn spawn_player(world: &mut World, uid: u32) -> Entity {
-    let persona_stack = hero_persona_stack();
+    let persona_stack = neutral_persona_stack();
 
     world
         .spawn((
@@ -178,7 +178,7 @@ fn spawn_player(world: &mut World, uid: u32) -> Entity {
                 name: "Independent".to_string(),
             },
             persona_stack,
-            Alignment::Hero,
+            Alignment::Neutral,
         ))
         .id()
 }

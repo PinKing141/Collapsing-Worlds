@@ -13,6 +13,7 @@ pub struct StoryletLibrary {
 impl StoryletLibrary {
     pub fn for_alignment(&self, alignment: Alignment) -> &[Storylet] {
         match alignment {
+            Alignment::Neutral => &self.hero,
             Alignment::Hero => &self.hero,
             Alignment::Vigilante => &self.vigilante,
             Alignment::Villain => &self.villain,

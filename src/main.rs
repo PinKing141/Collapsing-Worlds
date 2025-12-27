@@ -3,7 +3,10 @@ use std::env;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use superhero_universe::components::persona::{Alignment, PersonaStack, PersonaType};
+use superhero_universe::components::persona::{
+    hero_persona_stack, neutral_persona_stack, vigilante_persona_stack, villain_persona_stack,
+    Alignment, PersonaStack, PersonaType,
+};
 use superhero_universe::components::world::Position;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
 use superhero_universe::core::world::ActionIntent;
@@ -22,7 +25,8 @@ use superhero_universe::simulation::agents::{
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
-    apply_civilian_effects, tick_civilian_economy, tick_civilian_life, CivilianState,
+    apply_civilian_effects, tick_civilian_economy, tick_civilian_life, CivilianEvent,
+    CivilianState, ContactDomain, RelationType,
 };
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
@@ -31,6 +35,7 @@ use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandida
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
+use superhero_universe::simulation::economy::WealthTier;
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -141,6 +146,7 @@ fn main() {
         storylet_state,
         persona_stack,
         alignment,
+        civilian_state,
     } = world_state;
 
     let mut world = WorldState {
@@ -157,7 +163,7 @@ fn main() {
     let mut global_event_log = GlobalEventLog::default();
     let mut nemesis_state = NemesisState::default();
     let mut persona_stack = persona_stack;
-    let alignment = alignment;
+    let mut alignment = alignment;
     let mut storylet_state = storylet_state;
     let mut growth = growth;
     let storylets = load_storylet_library();
@@ -201,7 +207,7 @@ fn main() {
         in_public: true,
         witnesses: 0,
     };
-    let mut civilian_state = CivilianState::default();
+    let mut civilian_state = civilian_state;
     update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
     apply_civilian_pressure(&civilian_state, &mut pressure);
     apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
@@ -222,7 +228,7 @@ fn main() {
     let endgame_events = load_endgame_event_library();
     let global_events = load_global_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -242,7 +248,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events|resolve <event_id> <choice_id>|profile <balanced|vigilante|corporate>] | global [events|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -270,6 +276,105 @@ fn main() {
             }
             "personas" => {
                 print_persona_stack(&persona_stack, world.turn);
+            }
+            "alignment" => {
+                let sub = parts.next().unwrap_or("").to_lowercase();
+                match sub.as_str() {
+                    "" | "status" => {
+                        print_alignment_status(
+                            alignment,
+                            &origin_quest,
+                            &growth,
+                            &civilian_state,
+                        );
+                    }
+                    "choose" => {
+                        let Some(choice_raw) = parts.next() else {
+                            println!("Usage: alignment choose <hero|vigilante|villain>");
+                            continue;
+                        };
+                        if alignment != Alignment::Neutral {
+                            println!("Alignment already chosen: {:?}", alignment);
+                            continue;
+                        }
+                        let Some(choice) = parse_alignment(choice_raw) else {
+                            println!("Unknown alignment: {}", choice_raw);
+                            continue;
+                        };
+                        if choice == Alignment::Neutral {
+                            println!("Choose hero, vigilante, or villain.");
+                            continue;
+                        }
+                        let status =
+                            alignment_unlock_status(&origin_quest, &growth, &civilian_state);
+                        if !status.unlocked {
+                            println!(
+                                "Alignment choice locked: power_unlocked={} wealth_unlocked={}",
+                                status.has_power, status.has_wealth
+                            );
+                            continue;
+                        }
+                        apply_alignment_choice(&mut alignment, &mut persona_stack, choice);
+                        storylet_state.flags.remove("alignment_choice_unlocked");
+                        storylet_state
+                            .flags
+                            .insert("alignment_chosen".to_string(), true);
+                        println!("Alignment set to {:?}.", alignment);
+                        print_persona_state(&persona_stack, alignment, &city, &cases);
+                    }
+                    _ => {
+                        println!("Usage: alignment [status|choose <hero|vigilante|villain>]");
+                    }
+                }
+            }
+            "alterego" => {
+                let sub = parts.next().unwrap_or("").to_lowercase();
+                match sub.as_str() {
+                    "set" => {
+                        let Some(name) = parts.next() else {
+                            println!("Usage: alterego set <name>");
+                            continue;
+                        };
+                        if alignment == Alignment::Neutral {
+                            println!("Alignment is neutral. Choose alignment first.");
+                            continue;
+                        }
+                        if set_masked_label(&mut persona_stack, name) {
+                            println!("Alter ego set to {}.", name);
+                        } else {
+                            println!("No masked persona available.");
+                        }
+                    }
+                    _ => {
+                        println!("Usage: alterego set <name>");
+                    }
+                }
+            }
+            "life" => {
+                let sub = parts.next().unwrap_or("").to_lowercase();
+                match sub.as_str() {
+                    "new" => {
+                        start_new_life(
+                            &mut actor,
+                            &mut growth,
+                            &mut origin_quest,
+                            &mut persona_stack,
+                            &mut alignment,
+                            &mut civilian_state,
+                            &mut player_pos,
+                            &mut target,
+                            &mut storylet_state,
+                            &game_time,
+                        );
+                        update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
+                        apply_civilian_pressure(&civilian_state, &mut pressure);
+                        apply_pressure_modifiers(&mut world, &pressure, &endgame_state);
+                        println!("New life started. Alignment reset to Neutral.");
+                    }
+                    _ => {
+                        println!("Usage: life new");
+                    }
+                }
             }
             "cast" => {
                 print_cast(&characters);
@@ -461,6 +566,7 @@ fn main() {
                                             &cases,
                                             &combat,
                                             &growth,
+                                            &civilian_state,
                                             &storylet_state,
                                             &persona_stack,
                                             alignment,
@@ -511,6 +617,7 @@ fn main() {
                         &evidence,
                         &cases,
                         &pressure,
+                        &civilian_state,
                         &game_time,
                     );
                 }
@@ -960,7 +1067,54 @@ fn main() {
                                     &mut endgame_state,
                                 );
                                 if let Some(end_reason) = end_reason {
+                                    if end_reason == CombatEnd::PlayerDefeated {
+                                        start_new_life(
+                                            &mut actor,
+                                            &mut growth,
+                                            &mut origin_quest,
+                                            &mut persona_stack,
+                                            &mut alignment,
+                                            &mut civilian_state,
+                                            &mut player_pos,
+                                            &mut target,
+                                            &mut storylet_state,
+                                            &game_time,
+                                        );
+                                        update_pressure(
+                                            &mut pressure,
+                                            &city,
+                                            &evidence,
+                                            &cases,
+                                            &game_time,
+                                        );
+                                        apply_civilian_pressure(&civilian_state, &mut pressure);
+                                        apply_pressure_modifiers(
+                                            &mut world,
+                                            &pressure,
+                                            &endgame_state,
+                                        );
+                                        println!("You died. Starting a new life.");
+                                    }
                                     println!("Combat ended: {}", format_combat_end(end_reason));
+                                    process_civilian_death(
+                                        &mut actor,
+                                        &mut growth,
+                                        &mut origin_quest,
+                                        &mut persona_stack,
+                                        &mut alignment,
+                                        &mut civilian_state,
+                                        &mut player_pos,
+                                        &mut target,
+                                        &mut storylet_state,
+                                        &game_time,
+                                        &mut world,
+                                        &mut pressure,
+                                        &city,
+                                        &evidence,
+                                        &cases,
+                                        &endgame_state,
+                                        &combat,
+                                    );
                                     break;
                                 }
                             }
@@ -998,6 +1152,25 @@ fn main() {
                                 &mut event_log,
                             );
                             println!("Combat ended: {}", format_combat_end(end_reason));
+                            process_civilian_death(
+                                &mut actor,
+                                &mut growth,
+                                &mut origin_quest,
+                                &mut persona_stack,
+                                &mut alignment,
+                                &mut civilian_state,
+                                &mut player_pos,
+                                &mut target,
+                                &mut storylet_state,
+                                &game_time,
+                                &mut world,
+                                &mut pressure,
+                                &city,
+                                &evidence,
+                                &cases,
+                                &endgame_state,
+                                &combat,
+                            );
                         } else {
                             println!("No active combat.");
                         }
@@ -1029,6 +1202,25 @@ fn main() {
                                 &mut event_log,
                             );
                             println!("Combat ended: {}", format_combat_end(end_reason));
+                            process_civilian_death(
+                                &mut actor,
+                                &mut growth,
+                                &mut origin_quest,
+                                &mut persona_stack,
+                                &mut alignment,
+                                &mut civilian_state,
+                                &mut player_pos,
+                                &mut target,
+                                &mut storylet_state,
+                                &game_time,
+                                &mut world,
+                                &mut pressure,
+                                &city,
+                                &evidence,
+                                &cases,
+                                &endgame_state,
+                                &combat,
+                            );
                         } else {
                             println!("No active combat.");
                         }
@@ -1050,7 +1242,7 @@ fn main() {
                     .next()
                     .and_then(|v| v.parse::<u32>().ok())
                     .unwrap_or(1);
-                tick_world(
+                let death_pending = tick_world(
                     &mut world,
                     &mut actor,
                     &mut evidence,
@@ -1081,9 +1273,31 @@ fn main() {
                     &mut global_faction_director,
                     &mut global_faction_events,
                     &mut origin_quest,
+                    &growth,
                     &origin_paths,
                     count,
                 );
+                if death_pending {
+                    process_civilian_death(
+                        &mut actor,
+                        &mut growth,
+                        &mut origin_quest,
+                        &mut persona_stack,
+                        &mut alignment,
+                        &mut civilian_state,
+                        &mut player_pos,
+                        &mut target,
+                        &mut storylet_state,
+                        &game_time,
+                        &mut world,
+                        &mut pressure,
+                        &city,
+                        &evidence,
+                        &cases,
+                        &endgame_state,
+                        &combat,
+                    );
+                }
                 handle_endgame_transition(
                     &cases,
                     &pressure,
@@ -1100,6 +1314,7 @@ fn main() {
                     &cases,
                     &combat,
                     &growth,
+                    &civilian_state,
                     &storylet_state,
                     &persona_stack,
                     alignment,
@@ -1128,6 +1343,7 @@ fn main() {
         &cases,
         &combat,
         &growth,
+        &civilian_state,
         &storylet_state,
         &persona_stack,
         alignment,
@@ -1518,6 +1734,233 @@ fn print_persona_stack(stack: &PersonaStack, turn: u64) {
     }
 }
 
+struct AlignmentUnlockStatus {
+    has_power: bool,
+    has_wealth: bool,
+    unlocked: bool,
+}
+
+fn alignment_unlock_status(
+    origin_quest: &OriginQuestState,
+    growth: &GrowthState,
+    civilian_state: &CivilianState,
+) -> AlignmentUnlockStatus {
+    let has_power = origin_quest.completed || !growth.unlocked_expressions.is_empty();
+    let has_wealth =
+        civilian_state.wealth.tier.rank() >= WealthTier::Affluent.rank();
+    AlignmentUnlockStatus {
+        has_power,
+        has_wealth,
+        unlocked: has_power || has_wealth,
+    }
+}
+
+fn print_alignment_status(
+    alignment: Alignment,
+    origin_quest: &OriginQuestState,
+    growth: &GrowthState,
+    civilian_state: &CivilianState,
+) {
+    println!("Alignment: {:?}", alignment);
+    if alignment != Alignment::Neutral {
+        return;
+    }
+    let status = alignment_unlock_status(origin_quest, growth, civilian_state);
+    println!(
+        "Alignment choice: power_unlocked={} wealth_unlocked={} -> {}",
+        status.has_power,
+        status.has_wealth,
+        if status.unlocked { "available" } else { "locked" }
+    );
+}
+
+fn apply_alignment_choice(
+    alignment: &mut Alignment,
+    persona_stack: &mut PersonaStack,
+    choice: Alignment,
+) {
+    *alignment = choice;
+    *persona_stack = match choice {
+        Alignment::Neutral => neutral_persona_stack(),
+        Alignment::Hero => hero_persona_stack(),
+        Alignment::Vigilante => vigilante_persona_stack(),
+        Alignment::Villain => villain_persona_stack(),
+    };
+}
+
+fn set_masked_label(stack: &mut PersonaStack, label: &str) -> bool {
+    if let Some(masked) = stack
+        .personas
+        .iter_mut()
+        .find(|persona| persona.persona_type == PersonaType::Masked)
+    {
+        masked.label = label.to_string();
+        return true;
+    }
+    false
+}
+
+fn start_new_life(
+    actor: &mut ActorState,
+    growth: &mut GrowthState,
+    origin_quest: &mut OriginQuestState,
+    persona_stack: &mut PersonaStack,
+    alignment: &mut Alignment,
+    civilian_state: &mut CivilianState,
+    player_pos: &mut Position,
+    target: &mut TargetContext,
+    storylet_state: &mut StoryletState,
+    game_time: &GameTime,
+) {
+    *actor = ActorState {
+        stamina: 10,
+        focus: 10,
+        ..Default::default()
+    };
+    *growth = GrowthState::default();
+    *origin_quest = OriginQuestState::default();
+    let legacy = std::mem::take(&mut civilian_state.legacy);
+    *civilian_state = CivilianState::default();
+    civilian_state.legacy = legacy;
+    civilian_state.life.birth_day = game_time.day;
+    *alignment = Alignment::Neutral;
+    *persona_stack = neutral_persona_stack();
+    *player_pos = Position { x: 0, y: 0 };
+    *target = TargetContext {
+        distance_m: Some(10),
+        has_line_of_sight: true,
+        has_contact: false,
+        in_public: true,
+        witnesses: 0,
+    };
+    storylet_state.flags.remove("alignment_choice_unlocked");
+    storylet_state.flags.remove("alignment_chosen");
+    storylet_state.fired.remove("alignment_choice_prompt");
+    storylet_state.cooldowns.remove("alignment_choice_prompt");
+    storylet_state.flags.remove("life.mutation_ready");
+    storylet_state.fired.remove("life_mutation_spark");
+    storylet_state.cooldowns.remove("life_mutation_spark");
+    apply_legacy_perks(civilian_state, storylet_state);
+}
+
+fn apply_legacy_perks(
+    civilian_state: &mut CivilianState,
+    storylet_state: &mut StoryletState,
+) {
+    let Some(record) = civilian_state.legacy.last() else {
+        return;
+    };
+    let mut effects = Vec::new();
+
+    if record.wealth_tier.rank() >= WealthTier::Affluent.rank() {
+        effects.push("cash:+60".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.wealth".to_string(), true);
+    }
+    if record.reputation.community >= 70 {
+        effects.push("community:+4".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.community".to_string(), true);
+    }
+    if record.reputation.media >= 70 {
+        effects.push("media:+4".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.media".to_string(), true);
+    }
+    if record.reputation.career >= 70 {
+        effects.push("career:+4".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.career".to_string(), true);
+    }
+    if record.career_level >= 4 {
+        effects.push("career_xp:+8".to_string());
+    }
+    if record
+        .achievements
+        .iter()
+        .any(|entry| entry.eq_ignore_ascii_case("Power broker"))
+    {
+        effects.push("favors:+2".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.power".to_string(), true);
+    }
+    if record
+        .achievements
+        .iter()
+        .any(|entry| entry.eq_ignore_ascii_case("Local influence"))
+    {
+        effects.push("access:+2".to_string());
+        storylet_state
+            .flags
+            .insert("legacy.rumor.influence".to_string(), true);
+    }
+    if record.alignment != "Neutral" {
+        storylet_state
+            .flags
+            .insert("legacy.rumor.masked".to_string(), true);
+    }
+
+    if !effects.is_empty() {
+        apply_civilian_effects(civilian_state, &effects);
+    }
+}
+
+fn process_civilian_death(
+    actor: &mut ActorState,
+    growth: &mut GrowthState,
+    origin_quest: &mut OriginQuestState,
+    persona_stack: &mut PersonaStack,
+    alignment: &mut Alignment,
+    civilian_state: &mut CivilianState,
+    player_pos: &mut Position,
+    target: &mut TargetContext,
+    storylet_state: &mut StoryletState,
+    game_time: &GameTime,
+    world: &mut WorldState,
+    pressure: &mut PressureState,
+    city: &CityState,
+    evidence: &WorldEvidence,
+    cases: &CaseRegistry,
+    endgame_state: &EndgameState,
+    combat: &CombatState,
+) -> bool {
+    if combat.active {
+        return false;
+    }
+    let Some(death) = civilian_state.pending_death.take() else {
+        return false;
+    };
+    let alignment_label = format!("{:?}", *alignment);
+    let record = civilian_state.record_legacy(&alignment_label, &death.reason, death.day);
+    start_new_life(
+        actor,
+        growth,
+        origin_quest,
+        persona_stack,
+        alignment,
+        civilian_state,
+        player_pos,
+        target,
+        storylet_state,
+        game_time,
+    );
+    update_pressure(pressure, city, evidence, cases, game_time);
+    apply_civilian_pressure(civilian_state, pressure);
+    apply_pressure_modifiers(world, pressure, endgame_state);
+    println!(
+        "Life ended at age {} ({}). New life started. Legacy recorded: {} achievements.",
+        record.age_years,
+        record.death_reason,
+        record.achievements.len()
+    );
+    true
+}
+
 fn handle_switch(
     persona_id: &str,
     stack: &mut PersonaStack,
@@ -1736,12 +2179,55 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         career_needed
     );
     println!(
+        "  Life: age={} stage={:?} mutant_gene={} mutation_ready={}",
+        state.life.age_years,
+        state.life.life_stage,
+        state.life.mutant_gene,
+        state.life.mutation_ready
+    );
+    println!(
+        "  Mortality: risk={} legacy_count={}",
+        state.life.mortality_risk,
+        state.legacy.len()
+    );
+    println!(
+        "  Risk: mistake={} tech_access={}",
+        state.mistake_risk,
+        state.tech_access_score()
+    );
+    println!(
+        "  Education: level={:?} progress={} attendance={} dropout_risk={} credits={} enrolled={}",
+        state.education.level,
+        state.education.progress,
+        state.education.attendance,
+        state.education.dropout_risk,
+        state.education.credits,
+        state.education.is_enrolled
+    );
+    println!(
+        "  Health: stress={} sleep_debt={} fitness={} injuries={}",
+        state.health.stress,
+        state.health.sleep_debt,
+        state.health.fitness,
+        state.health.injuries
+    );
+    println!("  Routine: {}", state.routine_summary());
+    println!(
         "  Finances: cash={} debt={} rent={} rent_due_in={} wage={}",
         state.finances.cash,
         state.finances.debt,
         state.finances.rent,
         state.finances.rent_due_in,
         state.finances.wage
+    );
+    println!(
+        "  Housing: neighborhood={} rent={} stability={} safety={} privacy={} relocation_cd={}",
+        state.housing.neighborhood_id,
+        state.housing.rent,
+        state.housing.stability,
+        state.housing.safety,
+        state.housing.privacy,
+        state.housing.relocation_cooldown
     );
     println!(
         "  Wealth: tier={:?} profile={} net_worth={}CR liquidity={:.2} income={}CR upkeep={}CR",
@@ -1788,8 +2274,14 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         println!("  Contacts:");
         for contact in &state.contacts {
             println!(
-                "    {} -> {:?} {:?} (bond={} influence={})",
-                contact.name, contact.domain, contact.level, contact.bond, contact.influence
+                "    {} -> {:?} {:?} {:?} (bond={} influence={} last_day={})",
+                contact.name,
+                contact.domain,
+                contact.relation_type,
+                contact.level,
+                contact.bond,
+                contact.influence,
+                contact.last_interaction_day
             );
         }
     }
@@ -1797,6 +2289,55 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         "  Civilian pressure targets: temporal={:.1} resource={:.1} moral={:.1} identity={:.1}",
         pressure.temporal, pressure.resource, pressure.moral, pressure.identity
     );
+}
+
+fn contact_domain_label(domain: ContactDomain) -> &'static str {
+    match domain {
+        ContactDomain::Professional => "professional",
+        ContactDomain::Community => "community",
+        ContactDomain::Media => "media",
+        ContactDomain::Underground => "underground",
+    }
+}
+
+fn relation_type_label(relation_type: RelationType) -> &'static str {
+    match relation_type {
+        RelationType::Family => "family",
+        RelationType::Mentor => "mentor",
+        RelationType::Rival => "rival",
+        RelationType::Romance => "romance",
+        RelationType::Colleague => "colleague",
+        RelationType::Peer => "peer",
+    }
+}
+
+fn render_civilian_text(
+    template: &str,
+    state: &CivilianState,
+    event: &CivilianEvent,
+) -> String {
+    let Some(contact_name) = event.contact_name.as_deref() else {
+        return template.to_string();
+    };
+    let mut output = template
+        .replace("{contact}", contact_name)
+        .replace("{contact_name}", contact_name);
+    if let Some(contact) = state.contacts.iter().find(|entry| entry.name == contact_name) {
+        output = output.replace("{relation}", relation_type_label(contact.relation_type));
+        output = output.replace("{domain}", contact_domain_label(contact.domain));
+    }
+    output
+}
+
+fn expand_civilian_effects(
+    effects: &[String],
+    state: &CivilianState,
+    event: &CivilianEvent,
+) -> Vec<String> {
+    effects
+        .iter()
+        .map(|effect| render_civilian_text(effect, state, event))
+        .collect()
 }
 
 fn print_pending_civilian_events(
@@ -1813,9 +2354,11 @@ fn print_pending_civilian_events(
         let age = time.tick.saturating_sub(event.created_tick);
         match find_civilian_event(library, &event.storylet_id) {
             Some(def) => {
-                println!("  {} | {} | queued {} ticks ago", def.id, def.title, age);
+                let title = render_civilian_text(&def.title, state, event);
+                println!("  {} | {} | queued {} ticks ago", def.id, title, age);
                 for choice in &def.choices {
-                    println!("    [{}] {}", choice.id, choice.text);
+                    let text = render_civilian_text(&choice.text, state, event);
+                    println!("    [{}] {}", choice.id, text);
                 }
             }
             None => {
@@ -1841,6 +2384,16 @@ fn resolve_civilian_event(
         println!("Unknown civilian event: {}", event_id);
         return;
     };
+    let pending_event = state
+        .pending_events
+        .iter()
+        .find(|event| event.storylet_id == event_id)
+        .cloned()
+        .unwrap_or(CivilianEvent {
+            storylet_id: event_id.to_string(),
+            created_tick: 0,
+            contact_name: None,
+        });
     let Some(choice) = event_def
         .choices
         .iter()
@@ -1849,11 +2402,13 @@ fn resolve_civilian_event(
         println!("Unknown choice {} for event {}", choice_id, event_id);
         return;
     };
-    let mut applied = apply_civilian_effects(state, &event_def.effects);
-    applied.extend(apply_civilian_effects(state, &choice.effects));
+    let event_effects = expand_civilian_effects(&event_def.effects, state, &pending_event);
+    let choice_effects = expand_civilian_effects(&choice.effects, state, &pending_event);
+    let mut applied = apply_civilian_effects(state, &event_effects);
+    applied.extend(apply_civilian_effects(state, &choice_effects));
     let mut all_effects = Vec::new();
-    all_effects.extend(event_def.effects.iter().cloned());
-    all_effects.extend(choice.effects.iter().cloned());
+    all_effects.extend(event_effects.iter().cloned());
+    all_effects.extend(choice_effects.iter().cloned());
     let origin_effects = apply_origin_effects(
         parse_origin_effects(&all_effects),
         origin_quest,
@@ -2027,6 +2582,119 @@ fn apply_pressure_delta(
         *target = (*target + delta).clamp(0.0, 100.0);
         applied.push(format!("{} {:+.1}", label, delta));
     }
+}
+
+fn set_storylet_flag(state: &mut StoryletState, flag: &str, enabled: bool) {
+    if enabled {
+        state.flags.insert(flag.to_string(), true);
+    } else {
+        state.flags.remove(flag);
+    }
+}
+
+fn update_social_storylet_flags(civilian: &CivilianState, storylet_state: &mut StoryletState) {
+    let leverage = civilian.social_leverage_score();
+    let protection = civilian.social_protection_score();
+    let vulnerability = civilian.social_vulnerability_score();
+    set_storylet_flag(storylet_state, "social.leverage", leverage >= 60);
+    set_storylet_flag(storylet_state, "social.protected", protection >= 60);
+    set_storylet_flag(storylet_state, "social.vulnerable", vulnerability >= 60);
+}
+
+fn update_reputation_storylet_flags(civilian: &CivilianState, storylet_state: &mut StoryletState) {
+    let public_rep = civilian.public_reputation_score();
+    set_storylet_flag(storylet_state, "reputation.public_high", public_rep >= 70);
+    set_storylet_flag(storylet_state, "reputation.public_low", public_rep <= 30);
+    set_storylet_flag(
+        storylet_state,
+        "reputation.community_high",
+        civilian.reputation.community >= 70,
+    );
+    set_storylet_flag(
+        storylet_state,
+        "reputation.career_high",
+        civilian.reputation.career >= 70,
+    );
+}
+
+fn update_tech_storylet_flags(civilian: &CivilianState, storylet_state: &mut StoryletState) {
+    let tier_rank = civilian.wealth.tier.rank();
+    set_storylet_flag(
+        storylet_state,
+        "tech.access_basic",
+        tier_rank >= WealthTier::Working.rank(),
+    );
+    set_storylet_flag(
+        storylet_state,
+        "tech.access_advanced",
+        tier_rank >= WealthTier::Affluent.rank(),
+    );
+    set_storylet_flag(
+        storylet_state,
+        "tech.access_prototype",
+        tier_rank >= WealthTier::Wealthy.rank(),
+    );
+    set_storylet_flag(
+        storylet_state,
+        "tech.access_arsenal",
+        tier_rank >= WealthTier::UltraWealthy.rank(),
+    );
+}
+
+fn apply_tech_capability(actor: &mut ActorState, civilian: &CivilianState) {
+    let tech_access = civilian.tech_access_score();
+    let resource_budget = (tech_access / 12).max(0) as i64;
+    actor
+        .resources
+        .insert("resource".to_string(), resource_budget);
+}
+
+fn apply_public_reputation_attention(
+    civilian: &mut CivilianState,
+    city: &mut CityState,
+    time: &GameTime,
+) {
+    if civilian.last_reputation_heat_day == time.day {
+        return;
+    }
+    civilian.last_reputation_heat_day = time.day;
+    let public_rep = civilian.public_reputation_score();
+    if public_rep < 70 || time.day % 7 != 0 {
+        return;
+    }
+    let bonus = 1 + ((public_rep - 70) / 20).clamp(0, 2);
+    if let Some(location) = city.locations.get_mut(&city.active_location) {
+        location.heat = (location.heat + bonus).clamp(0, 100);
+    }
+}
+
+fn apply_civilian_mistake_consequences(
+    civilian: &mut CivilianState,
+    city: &mut CityState,
+    pressure: &mut PressureState,
+    time: &GameTime,
+) {
+    if civilian.last_mistake_day == time.day {
+        return;
+    }
+    if civilian.mistake_risk < 65 {
+        return;
+    }
+    civilian.last_mistake_day = time.day;
+    let public_rep = civilian.public_reputation_score();
+    let visibility_bonus = if public_rep >= 85 {
+        2
+    } else if public_rep >= 70 {
+        1
+    } else {
+        0
+    };
+    let heat_delta = ((civilian.mistake_risk - 55) / 15).clamp(1, 6) + visibility_bonus;
+    if let Some(location) = city.locations.get_mut(&city.active_location) {
+        location.heat = (location.heat + heat_delta).clamp(0, 100);
+    }
+    let identity_delta = (civilian.mistake_risk as f32 * 0.05).clamp(1.0, 8.0);
+    pressure.identity = (pressure.identity + identity_delta).clamp(0.0, 100.0);
 }
 
 fn find_civilian_event<'a>(
@@ -2358,10 +3026,12 @@ fn tick_world(
     global_faction_director: &mut GlobalFactionDirector,
     global_faction_events: &mut GlobalFactionEventLog,
     origin_quest: &mut OriginQuestState,
+    growth: &GrowthState,
     origin_paths: &OriginPathCatalog,
     turns: u32,
-) {
+) -> bool {
     let mut agent_event_log = WorldEventLog::default();
+    let mut death_pending = false;
     for _ in 0..turns {
         world.turn += 1;
         tick_cooldowns(actor);
@@ -2381,10 +3051,38 @@ fn tick_world(
             &mut agent_event_log,
         );
         tick_civilian_life(civilian_state, game_time);
+        if civilian_state.pending_death.is_some() {
+            death_pending = true;
+            break;
+        }
         tick_civilian_economy(civilian_state, game_time);
+        apply_tech_capability(actor, civilian_state);
         storylet_state.tick();
         let rewards = tick_origin_path(origin_quest, origin_paths);
         apply_origin_rewards(rewards.as_slice(), pressure);
+        if alignment == Alignment::Neutral {
+            let status = alignment_unlock_status(origin_quest, growth, civilian_state);
+            if status.unlocked
+                && !storylet_state
+                    .flags
+                    .contains_key("alignment_choice_unlocked")
+            {
+                storylet_state
+                    .flags
+                    .insert("alignment_choice_unlocked".to_string(), true);
+                println!(
+                    "Alignment choice unlocked. Use `alignment choose <hero|vigilante|villain>`."
+                );
+            }
+        }
+        if civilian_state.life.mutation_ready
+            && !storylet_state.flags.contains_key("life.mutation_ready")
+        {
+            storylet_state
+                .flags
+                .insert("life.mutation_ready".to_string(), true);
+            println!("Mutation potential awakened.");
+        }
         run_faction_director(faction_director, city, scene, faction_events);
         resolve_faction_events(
             faction_events,
@@ -2407,6 +3105,16 @@ fn tick_world(
         );
         update_pressure(pressure, city, scene, cases, game_time);
         apply_civilian_pressure(civilian_state, pressure);
+        apply_public_reputation_attention(civilian_state, city, game_time);
+        apply_civilian_mistake_consequences(civilian_state, city, pressure, game_time);
+        update_social_storylet_flags(civilian_state, storylet_state);
+        update_reputation_storylet_flags(civilian_state, storylet_state);
+        update_tech_storylet_flags(civilian_state, storylet_state);
+        set_storylet_flag(
+            storylet_state,
+            "civilian.mistake_recent",
+            civilian_state.last_mistake_day == game_time.day,
+        );
         apply_pressure_modifiers(world, pressure, endgame_state);
         let ctx = build_storylet_context(
             alignment,
@@ -2417,6 +3125,7 @@ fn tick_world(
             scene,
             cases,
             pressure,
+            civilian_state,
             game_time,
         );
         if let Some(storylet) = select_storylet_for_turn(storylets, alignment, storylet_state, &ctx)
@@ -2436,6 +3145,7 @@ fn tick_world(
         );
         run_global_faction_director(global_faction_director, region, global_faction_events);
     }
+    death_pending
 }
 
 fn handle_endgame_transition(
@@ -2535,6 +3245,7 @@ fn persist_world_state(
     cases: &CaseRegistry,
     combat: &CombatState,
     growth: &GrowthState,
+    civilian_state: &CivilianState,
     storylet_state: &StoryletState,
     persona_stack: &PersonaStack,
     alignment: Alignment,
@@ -2546,6 +3257,7 @@ fn persist_world_state(
         cases: cases.clone(),
         combat: combat.clone(),
         growth: growth.clone(),
+        civilian_state: civilian_state.clone(),
         storylet_state: storylet_state.clone(),
         persona_stack: persona_stack.clone(),
         alignment,
@@ -2678,6 +3390,14 @@ struct StoryletContext {
     is_day: bool,
     stress: i32,
     reputation: i32,
+    reputation_media: i32,
+    reputation_community: i32,
+    reputation_career: i32,
+    wealth_tier: i32,
+    tech_access: i32,
+    social_leverage: i32,
+    social_protection: i32,
+    social_vulnerability: i32,
     pressure_identity: i32,
     pressure_moral: i32,
     pressure_institutional: i32,
@@ -2718,6 +3438,7 @@ fn list_storylets_available(
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
     pressure: &PressureState,
+    civilian_state: &CivilianState,
     game_time: &GameTime,
 ) {
     let ctx = build_storylet_context(
@@ -2729,6 +3450,7 @@ fn list_storylets_available(
         evidence,
         cases,
         pressure,
+        civilian_state,
         game_time,
     );
     let mut count = 0;
@@ -2800,6 +3522,7 @@ fn build_storylet_context(
     evidence: &WorldEvidence,
     cases: &CaseRegistry,
     pressure: &PressureState,
+    civilian_state: &CivilianState,
     game_time: &GameTime,
 ) -> StoryletContext {
     let active_persona = persona_stack.active_persona();
@@ -2836,6 +3559,16 @@ fn build_storylet_context(
         .filter_map(|(flag, enabled)| enabled.then(|| flag.clone()))
         .collect();
 
+    let reputation = civilian_state.public_reputation_score();
+    let reputation_media = civilian_state.reputation.media;
+    let reputation_community = civilian_state.reputation.community;
+    let reputation_career = civilian_state.reputation.career;
+    let wealth_tier = civilian_state.wealth.tier.rank() as i32;
+    let tech_access = civilian_state.tech_access_score();
+    let social_leverage = civilian_state.social_leverage_score();
+    let social_protection = civilian_state.social_protection_score();
+    let social_vulnerability = civilian_state.social_vulnerability_score();
+
     StoryletContext {
         alignment,
         active_persona: active_persona.map(|persona| persona.persona_type),
@@ -2852,7 +3585,15 @@ fn build_storylet_context(
         has_visible_signatures,
         is_day: game_time.is_day,
         stress: 0,
-        reputation: 0,
+        reputation,
+        reputation_media,
+        reputation_community,
+        reputation_career,
+        wealth_tier,
+        tech_access,
+        social_leverage,
+        social_protection,
+        social_vulnerability,
         pressure_identity: pressure.identity.round() as i32,
         pressure_moral: pressure.moral.round() as i32,
         pressure_institutional: pressure.institutional.round() as i32,
@@ -2974,6 +3715,7 @@ fn eval_condition(condition: &str, ctx: &StoryletContext) -> bool {
 
 fn parse_alignment(value: &str) -> Option<Alignment> {
     match value.to_ascii_uppercase().as_str() {
+        "NEUTRAL" => Some(Alignment::Neutral),
         "HERO" => Some(Alignment::Hero),
         "VIGILANTE" => Some(Alignment::Vigilante),
         "VILLAIN" => Some(Alignment::Villain),
@@ -3012,6 +3754,14 @@ fn numeric_metric(key: &str, ctx: &StoryletContext) -> Option<i32> {
         "case.progress" => Some(ctx.case_progress),
         "stress" => Some(ctx.stress),
         "reputation" => Some(ctx.reputation),
+        "reputation.media" => Some(ctx.reputation_media),
+        "reputation.community" => Some(ctx.reputation_community),
+        "reputation.career" => Some(ctx.reputation_career),
+        "wealth.tier" => Some(ctx.wealth_tier),
+        "tech.access" => Some(ctx.tech_access),
+        "social.leverage" => Some(ctx.social_leverage),
+        "social.protection" => Some(ctx.social_protection),
+        "social.vulnerability" => Some(ctx.social_vulnerability),
         "pressure.identity" => Some(ctx.pressure_identity),
         "pressure.moral" => Some(ctx.pressure_moral),
         "pressure.institutional" => Some(ctx.pressure_institutional),

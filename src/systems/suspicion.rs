@@ -28,7 +28,7 @@ pub fn suspicion_system(
 
     for (id, pos, mut stack, alignment, mut civilian) in personas.iter_mut() {
         let delta = deltas.get(&id.0).cloned().unwrap_or_default();
-        let alignment = alignment.copied().unwrap_or(Alignment::Hero);
+        let alignment = alignment.copied().unwrap_or(Alignment::Neutral);
         let location_id = city.location_for_position(pos);
         let location = city.locations.get(&location_id);
 

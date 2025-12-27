@@ -4,11 +4,12 @@ use std::path::Path;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json;
 
-use crate::components::persona::{hero_persona_stack, Alignment, PersonaStack};
+use crate::components::persona::{neutral_persona_stack, Alignment, PersonaStack};
 use crate::rules::mastery::MasteryStage;
 use crate::rules::power::ExpressionId;
 use crate::rules::signature::SignatureType;
 use crate::simulation::case::{Case, CaseRegistry, CaseStatus, CaseTargetType};
+use crate::simulation::civilian::CivilianState;
 use crate::simulation::cast::{
     CharacterPersona, CharacterPower, CharacterRelationship, CharacterRole, PersistentCharacter,
     PromotionCandidate,
@@ -22,7 +23,7 @@ use crate::simulation::region::{ContinentId, CountryId, RegionId};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
 
-const WORLD_SCHEMA_VERSION: i64 = 5;
+const WORLD_SCHEMA_VERSION: i64 = 6;
 const WORLD_SAVE_VERSION: i64 = 1;
 
 const WORLD_DB_SCHEMA: &str = r#"
@@ -52,6 +53,11 @@ CREATE TABLE IF NOT EXISTS persona_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   alignment TEXT NOT NULL,
   stack_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS civilian_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  state_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS locations (
@@ -233,6 +239,7 @@ fn response_for_heat(heat: i32) -> HeatResponse {
 
 fn alignment_to_str(alignment: Alignment) -> &'static str {
     match alignment {
+        Alignment::Neutral => "NEUTRAL",
         Alignment::Hero => "HERO",
         Alignment::Vigilante => "VIGILANTE",
         Alignment::Villain => "VILLAIN",
@@ -241,6 +248,7 @@ fn alignment_to_str(alignment: Alignment) -> &'static str {
 
 fn alignment_from_str(value: &str) -> Option<Alignment> {
     match value {
+        "NEUTRAL" => Some(Alignment::Neutral),
         "HERO" => Some(Alignment::Hero),
         "VIGILANTE" => Some(Alignment::Vigilante),
         "VILLAIN" => Some(Alignment::Villain),
@@ -478,6 +486,7 @@ pub struct WorldDbState {
     pub storylet_state: StoryletState,
     pub persona_stack: PersonaStack,
     pub alignment: Alignment,
+    pub civilian_state: CivilianState,
 }
 
 impl Default for WorldDbState {
@@ -493,8 +502,9 @@ impl Default for WorldDbState {
             combat,
             growth: GrowthState::default(),
             storylet_state: StoryletState::default(),
-            persona_stack: hero_persona_stack(),
-            alignment: Alignment::Hero,
+            persona_stack: neutral_persona_stack(),
+            alignment: Alignment::Neutral,
+            civilian_state: CivilianState::default(),
         }
     }
 }
@@ -541,6 +551,7 @@ impl WorldDb {
         let combat = self.load_combat_state(active_location)?;
         let growth = self.load_growth_state()?;
         let storylet_state = self.load_storylet_state()?;
+        let civilian_state = self.load_civilian_state()?;
 
         Ok(Some(WorldDbState {
             world_turn,
@@ -552,6 +563,7 @@ impl WorldDb {
             storylet_state,
             persona_stack,
             alignment,
+            civilian_state,
         }))
     }
 
@@ -583,6 +595,14 @@ impl WorldDb {
         tx.execute(
             "INSERT INTO persona_state (id, alignment, stack_json) VALUES (1, ?1, ?2)",
             params![alignment_to_str(state.alignment), stack_json],
+        )?;
+
+        tx.execute("DELETE FROM civilian_state", [])?;
+        let civilian_json = serde_json::to_string(&state.civilian_state)
+            .map_err(|err| WorldDbError::InvalidData(err.to_string()))?;
+        tx.execute(
+            "INSERT INTO civilian_state (id, state_json) VALUES (1, ?1)",
+            params![civilian_json],
         )?;
 
         tx.execute("DELETE FROM locations", [])?;
@@ -766,7 +786,8 @@ impl WorldDb {
                 if (schema_version == 1
                     || schema_version == 2
                     || schema_version == 3
-                    || schema_version == 4)
+                    || schema_version == 4
+                    || schema_version == 5)
                     && save_version == WORLD_SAVE_VERSION
                 {
                     self.conn.execute(
@@ -1000,7 +1021,7 @@ impl WorldDb {
             .optional()?;
 
         let Some((alignment_raw, stack_json)) = row else {
-            return Ok((hero_persona_stack(), Alignment::Hero));
+            return Ok((neutral_persona_stack(), Alignment::Neutral));
         };
 
         let alignment = alignment_from_str(alignment_raw.as_str()).ok_or_else(|| {
@@ -1011,6 +1032,21 @@ impl WorldDb {
             .map_err(|err| WorldDbError::InvalidData(err.to_string()))?;
 
         Ok((stack, alignment))
+    }
+
+    fn load_civilian_state(&self) -> Result<CivilianState, WorldDbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT state_json FROM civilian_state WHERE id = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let Some(json) = row else {
+            return Ok(CivilianState::default());
+        };
+        serde_json::from_str(&json).map_err(|err| WorldDbError::InvalidData(err.to_string()))
     }
 
     fn load_growth_state(&self) -> Result<GrowthState, WorldDbError> {

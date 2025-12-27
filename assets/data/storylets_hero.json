@@ -59,6 +59,62 @@
       "tags": ["global", "escalation", "cosmic"]
     },
     {
+      "id": "alignment_choice_prompt",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": [
+        "alignment == NEUTRAL",
+        "flag.alignment_choice_unlocked",
+        "persona == CIVILIAN"
+      ],
+      "text_stub": "A fork in the road opens. Choose your path (use `alignment choose hero|vigilante|villain`).",
+      "choices": [
+        {
+          "id": "hero",
+          "text": "Protect and inspire.",
+          "effects": []
+        },
+        {
+          "id": "vigilante",
+          "text": "Enforce your own justice.",
+          "effects": []
+        },
+        {
+          "id": "villain",
+          "text": "Seize power and reshape the city.",
+          "effects": []
+        }
+      ],
+      "tags": ["alignment", "choice", "origin"]
+    },
+    {
+      "id": "life_mutation_spark",
+      "category": "CIVILIAN_LIFE",
+      "preconditions": [
+        "alignment == NEUTRAL",
+        "flag.life.mutation_ready",
+        "persona == CIVILIAN"
+      ],
+      "text_stub": "Something in you stirs - too bright, too sudden. Your body feels different, charged.",
+      "choices": [
+        {
+          "id": "hide",
+          "text": "Hide the change and keep it quiet.",
+          "effects": []
+        },
+        {
+          "id": "confide",
+          "text": "Confide in someone you trust.",
+          "effects": []
+        },
+        {
+          "id": "test",
+          "text": "Test the limits of what you can do.",
+          "effects": []
+        }
+      ],
+      "tags": ["mutation", "life", "origin"]
+    },
+    {
       "id": "civ_job_late_notice",
       "category": "CIVILIAN_LIFE",
       "preconditions": ["alignment == HERO", "persona == CIVILIAN", "time.is_day"],
