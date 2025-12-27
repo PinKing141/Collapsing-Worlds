@@ -31,11 +31,15 @@ use superhero_universe::simulation::civilian::{
 use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
-use superhero_universe::simulation::cast::{PersistentCharacter, PromotionCandidate, PromotionReason};
+use superhero_universe::simulation::cast::{
+    current_year_from_day, tick_cast_aging, CastAgingReport, PersistentCharacter,
+    PromotionCandidate, PromotionReason,
+};
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
 use superhero_universe::simulation::economy::WealthTier;
+use superhero_universe::systems::economy::{attempt_gadget_purchase, GadgetPurchaseError, GadgetTier};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -154,6 +158,7 @@ fn main() {
         pressure: PressureModifiers::default(),
     };
     let mut game_time = game_time;
+    let mut last_cast_aging_year = current_year_from_day(game_time.day);
     let mut city = city;
     let mut city_events = CityEventLog::default();
     let mut event_log = WorldEventLog::default();
@@ -1306,6 +1311,13 @@ fn main() {
                     &mut storylet_state,
                     &mut endgame_state,
                 );
+                apply_cast_aging(
+                    &mut characters,
+                    &mut *world_repo,
+                    game_time.day,
+                    world.turn,
+                    &mut last_cast_aging_year,
+                );
                 persist_world_state(
                     &mut *world_repo,
                     &world,
@@ -1636,6 +1648,23 @@ fn format_combat_end(end: CombatEnd) -> &'static str {
         CombatEnd::PlayerDefeated => "player defeated",
         CombatEnd::OpponentsDefeated => "opponents defeated",
         CombatEnd::Resolved => "resolved",
+    }
+}
+
+fn parse_gadget_tier(value: &str) -> Option<GadgetTier> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "basic" => Some(GadgetTier::Basic),
+        "advanced" => Some(GadgetTier::Advanced),
+        "prototype" => Some(GadgetTier::Prototype),
+        "arsenal" => Some(GadgetTier::Arsenal),
+        _ => None,
+    }
+}
+
+fn format_gadget_error(err: GadgetPurchaseError) -> &'static str {
+    match err {
+        GadgetPurchaseError::InsufficientTier => "wealth tier too low",
+        GadgetPurchaseError::InsufficientLiquidity => "insufficient liquidity",
     }
 }
 
@@ -2695,6 +2724,41 @@ fn apply_civilian_mistake_consequences(
     }
     let identity_delta = (civilian.mistake_risk as f32 * 0.05).clamp(1.0, 8.0);
     pressure.identity = (pressure.identity + identity_delta).clamp(0.0, 100.0);
+}
+
+fn apply_cast_aging(
+    characters: &mut Vec<PersistentCharacter>,
+    world_repo: &mut dyn WorldRepository,
+    current_day: u32,
+    current_tick: u64,
+    last_cast_aging_year: &mut i32,
+) {
+    let current_year = current_year_from_day(current_day);
+    if current_year == *last_cast_aging_year {
+        return;
+    }
+    *last_cast_aging_year = current_year;
+    let report = tick_cast_aging(characters, current_year, current_tick);
+    if report.changed_ids.is_empty() {
+        return;
+    }
+    for character in characters.iter() {
+        if report.changed_ids.contains(&character.character_id) {
+            if let Err(err) = world_repo.upsert_character(character) {
+                eprintln!(
+                    "Failed to persist character {}: {}",
+                    character.character_id, err
+                );
+            }
+        }
+    }
+    if !report.retired.is_empty() || !report.deceased.is_empty() {
+        println!(
+            "Cast aging: retired={} deceased={}",
+            report.retired.len(),
+            report.deceased.len()
+        );
+    }
 }
 
 fn find_civilian_event<'a>(

@@ -1,4 +1,10 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+const DAYS_PER_YEAR: u32 = 336;
+const DEFAULT_START_YEAR: i32 = 2040;
+const RETIREMENT_AGE: i32 = 65;
+const MANDATORY_RETIREMENT_AGE: i32 = 75;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -21,6 +27,14 @@ pub struct PersistentCharacter {
     pub personas: Vec<CharacterPersona>,
     pub powers: Vec<CharacterPower>,
     pub relationships: Vec<CharacterRelationship>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CastAgingReport {
+    pub retired: Vec<String>,
+    pub deceased: Vec<String>,
+    pub assigned_birth_year: Vec<String>,
+    pub changed_ids: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,4 +137,128 @@ impl PromotionCandidate {
             relationships: Vec::new(),
         }
     }
+}
+
+pub fn current_year_from_day(day: u32) -> i32 {
+    let years = day.saturating_sub(1) / DAYS_PER_YEAR;
+    DEFAULT_START_YEAR + years as i32
+}
+
+pub fn tick_cast_aging(
+    characters: &mut Vec<PersistentCharacter>,
+    current_year: i32,
+    current_tick: u64,
+) -> CastAgingReport {
+    let mut report = CastAgingReport::default();
+    for character in characters.iter_mut() {
+        let birth_year = ensure_birth_year(character, current_year, &mut report);
+        let age_years = current_year.saturating_sub(birth_year);
+
+        if has_active_role(character, "DECEASED") {
+            continue;
+        }
+
+        if should_mark_deceased(character, current_year, age_years) {
+            mark_character_status(character, "DECEASED", current_tick);
+            report.deceased.push(character.character_id.clone());
+            report.changed_ids.insert(character.character_id.clone());
+            continue;
+        }
+
+        if !has_active_role(character, "RETIRED")
+            && should_mark_retired(character, current_year, age_years)
+        {
+            mark_character_status(character, "RETIRED", current_tick);
+            report.retired.push(character.character_id.clone());
+            report.changed_ids.insert(character.character_id.clone());
+        }
+    }
+    report
+}
+
+fn ensure_birth_year(
+    character: &mut PersistentCharacter,
+    current_year: i32,
+    report: &mut CastAgingReport,
+) -> i32 {
+    if let Some(year) = character.birth_year {
+        return year;
+    }
+    let seed = stable_seed_for_character(character);
+    let age = 24 + (seed % 31) as i32;
+    let birth_year = current_year - age;
+    character.birth_year = Some(birth_year);
+    report.assigned_birth_year.push(character.character_id.clone());
+    report.changed_ids.insert(character.character_id.clone());
+    birth_year
+}
+
+fn should_mark_retired(character: &PersistentCharacter, current_year: i32, age: i32) -> bool {
+    if age >= MANDATORY_RETIREMENT_AGE {
+        return true;
+    }
+    if age < RETIREMENT_AGE {
+        return false;
+    }
+    let roll = deterministic_roll(character, current_year, 31);
+    let base = 5 + (age - RETIREMENT_AGE) * 2;
+    roll < base.clamp(5, 35) as u32
+}
+
+fn should_mark_deceased(character: &PersistentCharacter, current_year: i32, age: i32) -> bool {
+    let risk = match age {
+        i32::MIN..=69 => 0,
+        70..=79 => 3,
+        80..=84 => 6,
+        85..=89 => 12,
+        90..=94 => 25,
+        _ => 45,
+    };
+    if risk == 0 {
+        return false;
+    }
+    let roll = deterministic_roll(character, current_year, 97);
+    roll < risk as u32
+}
+
+fn deterministic_roll(character: &PersistentCharacter, current_year: i32, salt: u32) -> u32 {
+    let seed = stable_seed_for_character(character);
+    let mixed = seed ^ (current_year as u32).wrapping_mul(2654435761) ^ salt;
+    mixed % 100
+}
+
+fn stable_seed_for_character(character: &PersistentCharacter) -> u32 {
+    let mut seed = 0u32;
+    for byte in character.character_id.as_bytes() {
+        seed = seed.wrapping_add(*byte as u32).wrapping_mul(1664525);
+    }
+    for byte in character.first_name.as_bytes() {
+        seed = seed.wrapping_add(*byte as u32).wrapping_mul(1013904223);
+    }
+    for byte in character.last_name.as_bytes() {
+        seed = seed.wrapping_add(*byte as u32).wrapping_mul(22695477);
+    }
+    seed
+}
+
+fn has_active_role(character: &PersistentCharacter, role: &str) -> bool {
+    character
+        .roles
+        .iter()
+        .any(|entry| entry.end_tick.is_none() && entry.role_type.eq_ignore_ascii_case(role))
+}
+
+fn mark_character_status(character: &mut PersistentCharacter, status: &str, current_tick: u64) {
+    for role in character.roles.iter_mut() {
+        if role.end_tick.is_none() {
+            role.end_tick = Some(current_tick);
+        }
+    }
+    character.roles.push(CharacterRole {
+        role_type: status.to_string(),
+        faction_id: None,
+        rank: None,
+        start_tick: current_tick,
+        end_tick: None,
+    });
 }
