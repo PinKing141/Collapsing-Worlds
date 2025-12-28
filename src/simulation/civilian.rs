@@ -12,6 +12,8 @@ use crate::simulation::time::GameTime;
 pub struct CivilianState {
     #[serde(default)]
     pub life: LifeState,
+    #[serde(default)]
+    pub mutant_profile: MutantProfile,
     pub job_status: JobStatus,
     pub job: CivilianJob,
     #[serde(default)]
@@ -60,6 +62,49 @@ pub struct CivilianState {
     pub last_health_day: u32,
     pub last_economy_day: u32,
     pub last_job_offer_day: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MutantProfile {
+    #[serde(default)]
+    pub awakened: bool,
+    #[serde(default)]
+    pub tier: u8,
+    #[serde(default)]
+    pub omega_parent: bool,
+    #[serde(default)]
+    pub parent_power_ids: Vec<i64>,
+    #[serde(default)]
+    pub baseline_power_id: Option<i64>,
+    #[serde(default)]
+    pub expression_power_ids: Vec<i64>,
+    #[serde(default)]
+    pub omni_power_ids: Vec<i64>,
+}
+
+impl Default for MutantProfile {
+    fn default() -> Self {
+        Self {
+            awakened: false,
+            tier: 0,
+            omega_parent: false,
+            parent_power_ids: Vec::new(),
+            baseline_power_id: None,
+            expression_power_ids: Vec::new(),
+            omni_power_ids: Vec::new(),
+        }
+    }
+}
+
+impl MutantProfile {
+    pub fn tier_label(&self) -> String {
+        match self.tier {
+            7 => "APEX".to_string(),
+            6 => "OMEGA".to_string(),
+            tier if tier >= 1 => format!("BETA-{}", tier),
+            _ => "NONE".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -635,6 +680,7 @@ impl Default for CivilianState {
         let routine = build_routine_schedule(job_status, &education, &life);
         Self {
             life,
+            mutant_profile: MutantProfile::default(),
             job_status,
             job: CivilianJob {
                 role: JobRole::Journalist,

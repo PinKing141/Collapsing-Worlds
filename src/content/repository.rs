@@ -52,6 +52,18 @@ pub trait PowerRepository {
         &self,
         power_id: PowerId,
     ) -> Result<Option<PowerInfo>, Box<dyn std::error::Error>>;
+    fn power_id_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<PowerId>, Box<dyn std::error::Error>>;
+    fn power_tags(&self, power_id: PowerId)
+        -> Result<Vec<String>, Box<dyn std::error::Error>>;
+    fn power_ids_by_tags(
+        &self,
+        tags_any: &[String],
+        tags_all: &[String],
+        tags_none: &[String],
+    ) -> Result<Vec<PowerId>, Box<dyn std::error::Error>>;
     fn expressions_for_persona(
         &self,
         persona_id: &str,

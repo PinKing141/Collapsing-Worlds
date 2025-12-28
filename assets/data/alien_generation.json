@@ -1,0 +1,623 @@
+{
+  "schema_version": 1,
+  "naming": {
+    "root_prefixes": [
+      "Ael",
+      "Bar",
+      "Cor",
+      "Dra",
+      "Ely",
+      "Gor",
+      "Ith",
+      "Jar",
+      "Kor",
+      "Lys",
+      "Myr",
+      "Nal",
+      "Or",
+      "Pra",
+      "Qor",
+      "Ryn",
+      "Sar",
+      "Tor",
+      "Vex",
+      "Zan"
+    ],
+    "root_cores": [
+      "ar",
+      "el",
+      "is",
+      "or",
+      "un",
+      "en",
+      "ai",
+      "yr",
+      "on",
+      "ul",
+      "eth",
+      "oth",
+      "ix",
+      "et",
+      "ir",
+      "um",
+      "an",
+      "os",
+      "ael",
+      "yl"
+    ],
+    "root_suffixes": [
+      "a",
+      "e",
+      "i",
+      "o",
+      "u",
+      "on",
+      "ar",
+      "ion",
+      "is",
+      "um",
+      "or",
+      "us",
+      "ael",
+      "en",
+      "yr"
+    ],
+    "world_suffixes": [
+      "on",
+      "ar",
+      "is",
+      "ion",
+      "os",
+      "ara",
+      "ea",
+      "ul",
+      "ath",
+      "et",
+      "Prime",
+      "Nexus",
+      "Axis"
+    ],
+    "species_suffixes": [
+      "ian",
+      "ite",
+      "ari",
+      "an",
+      "ene",
+      "orn",
+      "ese",
+      "born",
+      "kin"
+    ],
+    "demonym_suffixes": [
+      "ian",
+      "ite",
+      "ari",
+      "an",
+      "ene",
+      "ese",
+      "orn",
+      "kin"
+    ],
+    "house_prefixes": [
+      "High",
+      "Void",
+      "Solar",
+      "Dawn",
+      "Night",
+      "Iron",
+      "Glass",
+      "Storm",
+      "Azure",
+      "Silent",
+      "Prime",
+      "Ebon"
+    ],
+    "house_suffixes": [
+      "House",
+      "Line",
+      "Dynasty",
+      "Covenant",
+      "Order",
+      "Ward",
+      "Throne",
+      "Circle",
+      "Crest",
+      "Accord",
+      "Synod"
+    ]
+  },
+  "tables": {
+    "naming_style": [
+      {
+        "d6": 2,
+        "id": "homeworld_demonym",
+        "label": "Homeworld demonym",
+        "detail": "Species name matches the homeworld demonym.",
+        "tags": ["naming:homeworld"]
+      },
+      {
+        "d6": 3,
+        "id": "root_ethnonym",
+        "label": "Root ethnonym",
+        "detail": "Species name and homeworld share a root, but diverge in suffix.",
+        "tags": ["naming:root"]
+      },
+      {
+        "d6": 4,
+        "id": "dual_root",
+        "label": "Dual-root split",
+        "detail": "Species name and homeworld pull from different roots.",
+        "tags": ["naming:dual"]
+      },
+      {
+        "d6": 5,
+        "id": "house_title",
+        "label": "House title",
+        "detail": "Species identity centers on a ruling house or order.",
+        "tags": ["naming:house"]
+      },
+      {
+        "d6": 6,
+        "id": "cosmic_epithet",
+        "label": "Cosmic epithet",
+        "detail": "Species name reads like a cosmic epithet or legend.",
+        "tags": ["naming:epithet"]
+      }
+    ],
+    "star_archetype": [
+      {
+        "d6": 1,
+        "label": "Red remnant star",
+        "detail": "Cool, ancient light with long winters.",
+        "tags": ["star:red"]
+      },
+      {
+        "d6": 2,
+        "label": "White main star",
+        "detail": "Clean, harsh light and steady cycles.",
+        "tags": ["star:white"]
+      },
+      {
+        "d6": 3,
+        "label": "Binary pulse",
+        "detail": "Twin suns with violent radiation tides.",
+        "tags": ["star:binary"]
+      },
+      {
+        "d6": 4,
+        "label": "Blue giant",
+        "detail": "Bright, hot, short-lived brilliance.",
+        "tags": ["star:blue"]
+      },
+      {
+        "d6": 5,
+        "label": "Dark dwarf",
+        "detail": "Low light, heavy magnetic storms.",
+        "tags": ["star:dark"]
+      },
+      {
+        "d6": 6,
+        "label": "Living star",
+        "detail": "Stellar intelligence shapes destiny.",
+        "tags": ["star:sentient"]
+      }
+    ],
+    "origin": [
+      {
+        "d6": 1,
+        "label": "Ancient diaspora",
+        "detail": "Scattered colonies bound by ritual or code.",
+        "tags": ["origin:diaspora"]
+      },
+      {
+        "d6": 2,
+        "label": "Sealed cradle",
+        "detail": "Hidden homeworld emerging from isolation.",
+        "tags": ["origin:isolation"]
+      },
+      {
+        "d6": 3,
+        "label": "Exile lineage",
+        "detail": "A people banished to the edge of known space.",
+        "tags": ["origin:exile"]
+      },
+      {
+        "d6": 4,
+        "label": "Custodian mandate",
+        "detail": "Raised to guard or steward a cosmic resource.",
+        "tags": ["origin:guardian"]
+      },
+      {
+        "d6": 5,
+        "label": "Ascendant experiment",
+        "detail": "Engineered evolution shaped their rise.",
+        "tags": ["origin:engineered"]
+      },
+      {
+        "d6": 6,
+        "label": "Rift-born",
+        "detail": "Born from a dimensional fracture or anomaly.",
+        "tags": ["origin:rift"]
+      }
+    ],
+    "gravity": [
+      {
+        "2d6": 3,
+        "label": "Microgravity (0.2g)",
+        "detail": "Light frames and slow falls.",
+        "tags": ["gravity:low", "phys:fragile"]
+      },
+      {
+        "2d6": 5,
+        "label": "Low gravity (0.6g)",
+        "detail": "Long strides, high leaps.",
+        "tags": ["gravity:low"]
+      },
+      {
+        "2d6": 7,
+        "label": "Standard gravity (1.0g)",
+        "detail": "Baseline physiology.",
+        "tags": ["gravity:standard"]
+      },
+      {
+        "2d6": 9,
+        "label": "High gravity (1.4g)",
+        "detail": "Dense musculature and impact tolerance.",
+        "tags": ["gravity:high", "phys:strengthened"]
+      },
+      {
+        "2d6": 11,
+        "label": "Crushing gravity (2.0g)",
+        "detail": "Massive bone structure, slow but unstoppable.",
+        "tags": ["gravity:extreme", "phys:massive"]
+      },
+      {
+        "2d6": 12,
+        "label": "Variable gravity belts",
+        "detail": "Tidal shifts demand constant adaptation.",
+        "tags": ["gravity:variable"]
+      }
+    ],
+    "atmosphere": [
+      {
+        "2d6": 3,
+        "label": "Thin ionized air",
+        "detail": "Breath masks or dense lungs required.",
+        "tags": ["atmo:thin"]
+      },
+      {
+        "2d6": 5,
+        "label": "Dry, crisp mix",
+        "detail": "Low humidity and sharp winds.",
+        "tags": ["atmo:dry"]
+      },
+      {
+        "2d6": 7,
+        "label": "Breathable stable",
+        "detail": "Comfortable baseline air.",
+        "tags": ["atmo:breathable"]
+      },
+      {
+        "2d6": 9,
+        "label": "Dense pressure",
+        "detail": "Heavy air and thick clouds.",
+        "tags": ["atmo:dense"]
+      },
+      {
+        "2d6": 11,
+        "label": "Toxic reactive",
+        "detail": "Corrosive mix with periodic vents.",
+        "tags": ["atmo:toxic"]
+      },
+      {
+        "2d6": 12,
+        "label": "Exotic energy haze",
+        "detail": "Atmosphere acts like an energy field.",
+        "tags": ["atmo:exotic"]
+      }
+    ],
+    "climate": [
+      {
+        "2d6": 3,
+        "label": "Cryo-frozen",
+        "detail": "Persistent ice and brittle storms.",
+        "tags": ["climate:cold"]
+      },
+      {
+        "2d6": 5,
+        "label": "Cold steppe",
+        "detail": "Long winters, brief bright summers.",
+        "tags": ["climate:cold"]
+      },
+      {
+        "2d6": 7,
+        "label": "Temperate bands",
+        "detail": "Habitable belts with stable seasons.",
+        "tags": ["climate:temperate"]
+      },
+      {
+        "2d6": 9,
+        "label": "Arid furnace",
+        "detail": "Dry heat and hard winds.",
+        "tags": ["climate:hot"]
+      },
+      {
+        "2d6": 11,
+        "label": "Inferno",
+        "detail": "Extreme heat and volcanic cycles.",
+        "tags": ["climate:hot"]
+      },
+      {
+        "2d6": 12,
+        "label": "Flux wild",
+        "detail": "Rapid shifts across all extremes.",
+        "tags": ["climate:chaotic"]
+      }
+    ],
+    "terrain": [
+      { "d66": 11, "label": "Crystal badlands", "detail": "Prismatic spires and sharp mesas." },
+      { "d66": 13, "label": "Floating archipelagos", "detail": "Islands hover in thin air." },
+      { "d66": 15, "label": "Obsidian plains", "detail": "Black glass and brittle dunes." },
+      { "d66": 21, "label": "Megaforest canopy", "detail": "Towering trees form a second sky." },
+      { "d66": 23, "label": "Storm valleys", "detail": "Permanent wind tunnels and lightning." },
+      { "d66": 25, "label": "Canyon labyrinths", "detail": "Deep chasms and bridge cities." },
+      { "d66": 31, "label": "Radiant reefs", "detail": "Bioluminescent oceans and coral." },
+      { "d66": 33, "label": "Shifting salt deserts", "detail": "White dunes and mirage rivers." },
+      { "d66": 35, "label": "Magnet ridge", "detail": "Metallic cliffs and charged storms." },
+      { "d66": 41, "label": "Skyfall basins", "detail": "Gravity wells shape the land." },
+      { "d66": 43, "label": "Lava labyrinth", "detail": "Hot rivers and basalt islands." },
+      { "d66": 45, "label": "Twilight fjords", "detail": "Cold seas and knife-edge cliffs." },
+      { "d66": 51, "label": "Glass jungle", "detail": "Silica flora and razor leaves." },
+      { "d66": 53, "label": "Titan plateau", "detail": "High mesas and thin air." },
+      { "d66": 55, "label": "City scars", "detail": "Ancient ruins in vast grids." },
+      { "d66": 61, "label": "Moonfall craters", "detail": "Ringed by debris and dust." },
+      { "d66": 63, "label": "Ocean world", "detail": "Archipelagos on endless sea." },
+      { "d66": 65, "label": "Shadow basalt", "detail": "Perpetual twilight and dark stone." },
+      { "d66": 100, "label": "Void mirrors", "detail": "Reflective lakes that distort light." }
+    ],
+    "body_plan": [
+      {
+        "d6": 2,
+        "label": "Humanoid",
+        "detail": "Balanced limbs, upright posture.",
+        "tags": ["body:humanoid"]
+      },
+      {
+        "d6": 3,
+        "label": "Lithe tallform",
+        "detail": "Elongated build and long reach.",
+        "tags": ["body:elongated"]
+      },
+      {
+        "d6": 4,
+        "label": "Dense titan",
+        "detail": "Heavy frame and compact power.",
+        "tags": ["body:dense"]
+      },
+      {
+        "d6": 5,
+        "label": "Lithic form",
+        "detail": "Stone-like mass or crystalline plates.",
+        "tags": ["body:lithic"]
+      },
+      {
+        "d6": 6,
+        "label": "Plasma-veiled",
+        "detail": "Energy sheath over a physical core.",
+        "tags": ["body:energy"]
+      }
+    ],
+    "scale": [
+      {
+        "2d6": 3,
+        "label": "Compact (1.4m)",
+        "detail": "Small but dense build."
+      },
+      {
+        "2d6": 5,
+        "label": "Average (1.7m)",
+        "detail": "Human-scale."
+      },
+      {
+        "2d6": 7,
+        "label": "Tall (2.0m)",
+        "detail": "Long-limbed and imposing."
+      },
+      {
+        "2d6": 9,
+        "label": "Giant (2.5m)",
+        "detail": "Towering presence."
+      },
+      {
+        "2d6": 11,
+        "label": "Colossal (3.0m+)",
+        "detail": "Massive, slow-moving power."
+      },
+      {
+        "2d6": 12,
+        "label": "Variable scale",
+        "detail": "Adaptive density or size shifts."
+      }
+    ],
+    "covering": [
+      { "d6": 2, "label": "Dense dermal armor", "detail": "Natural plating." },
+      { "d6": 3, "label": "Smooth energy skin", "detail": "Heat-shedding membrane." },
+      { "d6": 4, "label": "Fine fiber mantle", "detail": "Fur or filament weave." },
+      { "d6": 5, "label": "Crystal ridges", "detail": "Shard-like protrusions." },
+      { "d6": 6, "label": "Liquid sheath", "detail": "Viscous, adaptive surface." }
+    ],
+    "pigmentation": [
+      { "d6": 2, "label": "Azure hues", "detail": "Cool blues and silvers." },
+      { "d6": 3, "label": "Obsidian tone", "detail": "Dark matte skin." },
+      { "d6": 4, "label": "Pale lumina", "detail": "Soft glow under low light." },
+      { "d6": 5, "label": "Copper iridescence", "detail": "Warm metallic sheen." },
+      { "d6": 6, "label": "Prismatic shift", "detail": "Color shifts by angle." }
+    ],
+    "feature": [
+      { "d6": 2, "label": "Cranial crest", "detail": "Blade-like ridge." },
+      { "d6": 3, "label": "Halo nodes", "detail": "Energy nodules along the spine." },
+      { "d6": 4, "label": "Glowing eyes", "detail": "Light-fracturing irises." },
+      { "d6": 5, "label": "Fractal tattoos", "detail": "Living glyphs on skin." },
+      { "d6": 6, "label": "Veil fins", "detail": "Membrane fins for balance." }
+    ],
+    "senses": [
+      { "d66": 11, "label": "Magnetoception", "detail": "Reads magnetic fields." },
+      { "d66": 12, "label": "Gravitic sense", "detail": "Feels mass and tides." },
+      { "d66": 13, "label": "Thermal sight", "detail": "Sees heat gradients." },
+      { "d66": 21, "label": "Echo mapping", "detail": "Spatial awareness via resonance." },
+      { "d66": 22, "label": "Spectrum split", "detail": "Multi-band vision." },
+      { "d66": 23, "label": "Biofield read", "detail": "Senses life signatures." },
+      { "d66": 31, "label": "Chronal pulse", "detail": "Notices time distortion." },
+      { "d66": 32, "label": "Quantum noise", "detail": "Detects probability shifts." },
+      { "d66": 33, "label": "Pressure taste", "detail": "Reads air density and toxins." },
+      { "d66": 41, "label": "Void hearing", "detail": "Picks up subsonic hums." },
+      { "d66": 42, "label": "Radiant vision", "detail": "Sees energy currents." },
+      { "d66": 43, "label": "Dreamsense", "detail": "Perceives emotional echoes." },
+      { "d66": 100, "label": "Hyperfocus", "detail": "Amplifies one sense at will." }
+    ],
+    "locomotion": [
+      { "d6": 2, "label": "Bipedal stride", "detail": "Stable and fast." },
+      { "d6": 3, "label": "Quadruped surge", "detail": "Burst speed and stability." },
+      { "d6": 4, "label": "Glide limbs", "detail": "Wide membranes and gliding." },
+      { "d6": 5, "label": "Gravitic float", "detail": "Suspended movement." },
+      { "d6": 6, "label": "Phase step", "detail": "Short-range displacement." }
+    ],
+    "adaptation": [
+      { "d6": 2, "label": "Radiation-hardened", "detail": "Survives stellar storms." },
+      { "d6": 3, "label": "Extreme pressure", "detail": "Stable under crushing loads." },
+      { "d6": 4, "label": "Toxin filtration", "detail": "Neutralizes corrosive air." },
+      { "d6": 5, "label": "Thermal shift", "detail": "Rapid temperature regulation." },
+      { "d6": 6, "label": "Metabolic pause", "detail": "Dormancy for long travel." }
+    ],
+    "society": [
+      {
+        "2d6": 3,
+        "label": "House dynasties",
+        "detail": "Lineages rule by oath and rite.",
+        "tags": ["society:houses"]
+      },
+      {
+        "2d6": 5,
+        "label": "Council of orbits",
+        "detail": "Regional councils unite by treaty.",
+        "tags": ["society:council"]
+      },
+      {
+        "2d6": 7,
+        "label": "Monastic orders",
+        "detail": "Power flows through disciplined orders.",
+        "tags": ["society:order"]
+      },
+      {
+        "2d6": 9,
+        "label": "Guild mandate",
+        "detail": "Trade guilds steer politics.",
+        "tags": ["society:guild"]
+      },
+      {
+        "2d6": 11,
+        "label": "Imperial ascendency",
+        "detail": "Central throne and planetary provinces.",
+        "tags": ["society:empire"]
+      },
+      {
+        "2d6": 12,
+        "label": "Nomad flotillas",
+        "detail": "Fleets migrate in deep space.",
+        "tags": ["society:nomad"]
+      }
+    ],
+    "values": [
+      { "2d6": 3, "label": "Honor-bound", "detail": "Oaths define status." },
+      { "2d6": 5, "label": "Stoic duty", "detail": "Service before self." },
+      { "2d6": 7, "label": "Curiosity-first", "detail": "Knowledge above conquest." },
+      { "2d6": 9, "label": "Dominion-seeking", "detail": "Expansion as destiny." },
+      { "2d6": 11, "label": "Balance-keepers", "detail": "Guard against chaos." },
+      { "2d6": 12, "label": "Liberation creed", "detail": "Freedom and resistance." }
+    ],
+    "technology": [
+      { "2d6": 3, "label": "Relic-tech", "detail": "Ancient tools, hard to repair." },
+      { "2d6": 5, "label": "Precision craft", "detail": "Elegant devices and artisans." },
+      { "2d6": 7, "label": "Integrated systems", "detail": "Tech woven into daily life." },
+      { "2d6": 9, "label": "Living tech", "detail": "Bio-engineered machines." },
+      { "2d6": 11, "label": "Quantum lattice", "detail": "Reality-anchored infrastructure." },
+      { "2d6": 12, "label": "Mythic engine", "detail": "Technology appears magical." }
+    ],
+    "interstellar_role": [
+      { "d6": 2, "label": "Wardens of trade lanes", "detail": "Protectors of space routes." },
+      { "d6": 3, "label": "Silent observers", "detail": "Watch without interference." },
+      { "d6": 4, "label": "Crusading enforcers", "detail": "Impose order across systems." },
+      { "d6": 5, "label": "Pilgrim allies", "detail": "Seek rare knowledge and aid." },
+      { "d6": 6, "label": "Rift explorers", "detail": "Probe anomalies and voids." }
+    ],
+    "cosmic_tier": [
+      { "d6": 1, "label": "Planetary", "detail": "Regional influence.", "tags": ["tier:planetary"] },
+      { "d6": 2, "label": "Stellar", "detail": "System-scale reach.", "tags": ["tier:stellar"] },
+      { "d6": 3, "label": "Sector", "detail": "Regional dominance.", "tags": ["tier:sector"] },
+      { "d6": 4, "label": "Galactic", "detail": "Known across the galaxy.", "tags": ["tier:galactic"] },
+      { "d6": 5, "label": "Cosmic", "detail": "Influence in cosmic events.", "tags": ["tier:cosmic"] },
+      { "d6": 6, "label": "Apex", "detail": "Reality-warping apex lineage.", "tags": ["tier:apex"] }
+    ],
+    "power_source": [
+      { "d6": 1, "label": "Stellar charge", "detail": "Power rises under specific spectra.", "tags": ["domain:energy"] },
+      { "d6": 2, "label": "Gravitic core", "detail": "Mass and gravity manipulation.", "tags": ["domain:space"] },
+      { "d6": 3, "label": "Psionic lattice", "detail": "Mental resonance and telepathy.", "tags": ["domain:psionic"] },
+      { "d6": 4, "label": "Chronal echo", "detail": "Minor time distortions.", "tags": ["domain:time"] },
+      { "d6": 5, "label": "Reality thread", "detail": "Subtle reality shaping.", "tags": ["domain:reality"] },
+      { "d6": 6, "label": "Divine covenant", "detail": "Power bound to oath or patron.", "tags": ["domain:divine"] }
+    ],
+    "signature_gift": [
+      {
+        "d6": 2,
+        "label": "Gravitic strength",
+        "detail": "Enhanced lifting and impact.",
+        "tags": ["power:strength", "power:gravity", "power:durability"]
+      },
+      {
+        "d6": 3,
+        "label": "Density control",
+        "detail": "Shift mass for defense.",
+        "tags": ["power:density", "power:durability", "power:body"]
+      },
+      {
+        "d6": 4,
+        "label": "Regenerative surge",
+        "detail": "Fast cellular recovery.",
+        "tags": ["power:regeneration", "power:healing", "power:body"]
+      },
+      {
+        "d6": 5,
+        "label": "Vector flight",
+        "detail": "Controlled aerial movement.",
+        "tags": ["power:flight", "power:speed"]
+      },
+      {
+        "d6": 6,
+        "label": "Quantum sight",
+        "detail": "See hidden energy patterns.",
+        "tags": ["power:vision", "power:sight", "power:eyes"]
+      }
+    ],
+    "flight_style": [
+      { "d6": 2, "label": "Grounded", "detail": "Flight is rare." },
+      { "d6": 3, "label": "Gravitic glide", "detail": "Low-energy lift and drift." },
+      { "d6": 4, "label": "Burst leap", "detail": "Short flight bursts." },
+      { "d6": 5, "label": "Vector jets", "detail": "Controlled thrust in any direction." },
+      { "d6": 6, "label": "Stellar sail", "detail": "Ride light and solar winds." }
+    ],
+    "weakness": [
+      { "d66": 11, "label": "Spectrum dampening", "detail": "Certain light bands reduce power.", "tags": ["weakness:spectrum"] },
+      { "d66": 12, "label": "Null field", "detail": "Power collapses in null zones.", "tags": ["weakness:null"] },
+      { "d66": 13, "label": "Low gravity sickness", "detail": "Weak in light gravity.", "tags": ["weakness:gravity"] },
+      { "d66": 21, "label": "Magnetic disruption", "detail": "Strong fields disorient senses.", "tags": ["weakness:magnetic"] },
+      { "d66": 22, "label": "Sound fracture", "detail": "High frequencies cause pain.", "tags": ["weakness:sonic"] },
+      { "d66": 23, "label": "Heat bleed", "detail": "Overheats under strain.", "tags": ["weakness:thermal"] },
+      { "d66": 31, "label": "Cold collapse", "detail": "Abilities stall in deep cold.", "tags": ["weakness:cold"] },
+      { "d66": 32, "label": "Toxin resonance", "detail": "Specific gases weaken them.", "tags": ["weakness:toxin"] },
+      { "d66": 33, "label": "Radiant overload", "detail": "Overcharged by intense light.", "tags": ["weakness:overload"] },
+      { "d66": 41, "label": "Temporal drag", "detail": "Time effects slow their reactions.", "tags": ["weakness:time"] },
+      { "d66": 42, "label": "Reality shear", "detail": "Dimensional edges cause harm.", "tags": ["weakness:reality"] },
+      { "d66": 100, "label": "Oath fracture", "detail": "Breaking an oath weakens them.", "tags": ["weakness:oath"] }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "powers": [
+    {
+      "id": "omnipotence",
+      "label": "Omnipotence",
+      "power_name": "Omnipotence",
+      "tags": ["omni", "domain:divine", "tier:apex"]
+    },
+    {
+      "id": "omniscience",
+      "label": "Omniscience",
+      "power_name": "Omniscience",
+      "tags": ["omni", "domain:psionic", "tier:apex"]
+    },
+    {
+      "id": "omnipresence",
+      "label": "Omnipresence",
+      "power_name": "Omnipresence",
+      "tags": ["omni", "domain:space", "tier:apex"]
+    },
+    {
+      "id": "omnikinesis",
+      "label": "Omnikinesis",
+      "power_name": "Omnikinesis",
+      "tags": ["omni", "domain:reality", "tier:apex"]
+    },
+    {
+      "id": "omnipower",
+      "label": "Omnipower",
+      "power_name": "Omnipower",
+      "tags": ["omni", "domain:divine", "tier:apex"]
+    }
+  ]
+}

@@ -10,10 +10,13 @@ use superhero_universe::components::persona::{
 use superhero_universe::components::world::Position;
 use superhero_universe::content::{ExpressionId, PowerId, PowerRepository, SqlitePowerRepository};
 use superhero_universe::core::world::ActionIntent;
+use superhero_universe::data::alien_generation::load_alien_generation_catalog;
+use superhero_universe::data::cosmic_constants::{load_cosmic_constants, CosmicConstantsCatalog};
 use superhero_universe::data::civilian_events::{load_civilian_event_catalog, CivilianStorylet};
 use superhero_universe::data::endgame_events::{load_endgame_event_catalog, EndgameEvent};
 use superhero_universe::data::global_events::{load_global_event_catalog, GlobalEventDefinition};
 use superhero_universe::data::nemesis::load_nemesis_action_catalog;
+use superhero_universe::data::omni_powers::{load_omni_powers, OmniPowerCatalog};
 use superhero_universe::data::storylets::{load_storylet_catalog, Storylet};
 use superhero_universe::rules::{
     can_use, use_power, ActorState, CostType, PressureModifiers, TargetContext, UseContext,
@@ -22,6 +25,8 @@ use superhero_universe::rules::{
 use superhero_universe::simulation::agents::{
     tick_agents, AgentEvent, AgentEventLog, AgentRegistry,
 };
+use superhero_universe::simulation::alien::{format_alien_profile, generate_alien_species};
+use superhero_universe::simulation::cosmic::OmniPowerRegistry;
 use superhero_universe::simulation::case::{CaseEventLog, CaseRegistry};
 use superhero_universe::simulation::city::{CityEventLog, CityState, LocationTag};
 use superhero_universe::simulation::civilian::{
@@ -33,14 +38,13 @@ use superhero_universe::simulation::combat::{
     CombatConsequences, CombatEnd, CombatIntent, CombatPressureDelta, CombatScale, CombatState,
 };
 use superhero_universe::simulation::cast::{
-    current_year_from_day, tick_cast_aging, CastAgingReport, PersistentCharacter,
-    PromotionCandidate, PromotionReason,
+    current_year_from_day, tick_cast_aging, PersistentCharacter, PromotionCandidate,
+    PromotionReason,
 };
 use superhero_universe::simulation::endgame::{
     apply_transformation_event, evaluate_transformation, EndgameState, TransformationState,
 };
 use superhero_universe::simulation::economy::WealthTier;
-use superhero_universe::systems::economy::{attempt_gadget_purchase, GadgetPurchaseError, GadgetTier};
 use superhero_universe::simulation::evidence::WorldEvidence;
 use superhero_universe::simulation::growth::{
     record_expression_use, select_evolution_candidate, GrowthState,
@@ -49,6 +53,10 @@ use superhero_universe::simulation::identity_evidence::{
     combat_consequence_modifiers, IdentityEvidenceModifiers, IdentityEvidenceStore, PersonaHint,
 };
 use superhero_universe::simulation::nemesis::NemesisState;
+use superhero_universe::simulation::power_assignment::{
+    assign_alien_powers, assign_mutant_powers, classify_mutant_tier, roll_mutant_lineage,
+    seed_mutant_inheritance, MutantInheritanceProfile, PowerAssignmentConfig, PowerAssignmentResult,
+};
 use superhero_universe::simulation::origin::{
     apply_origin_effects, current_origin_stage, load_origin_catalog, load_origin_path_catalog,
     parse_origin_effects, register_origin_event, select_origin_paths, start_origin_path,
@@ -154,6 +162,7 @@ fn main() {
         persona_stack,
         alignment,
         civilian_state,
+        omni_registry,
     } = world_state;
 
     let mut world = WorldState {
@@ -175,6 +184,25 @@ fn main() {
     let mut storylet_state = storylet_state;
     let mut growth = growth;
     let storylets = load_storylet_library();
+    let cosmic_constants = match load_cosmic_constants("./assets/data/cosmic_constants.json") {
+        Ok(catalog) => Some(catalog),
+        Err(err) => {
+            eprintln!("Failed to load cosmic constants: {}", err);
+            None
+        }
+    };
+    let omni_catalog = match load_omni_powers("./assets/data/omni_powers.json") {
+        Ok(catalog) => catalog,
+        Err(err) => {
+            eprintln!("Failed to load omni powers: {}", err);
+            superhero_universe::data::omni_powers::OmniPowerCatalog {
+                schema_version: 1,
+                powers: Vec::new(),
+            }
+        }
+    };
+    let mut omni_registry = omni_registry;
+    let power_assignment_config = PowerAssignmentConfig::default();
     let origin_paths = match load_origin_path_catalog("./assets/data/origin_paths.json") {
         Ok(catalog) => catalog,
         Err(err) => {
@@ -236,7 +264,7 @@ fn main() {
     let endgame_events = load_endgame_event_library();
     let global_events = load_global_event_library();
 
-    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
+    println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | alien [generate|detail|powers] [seed] | cosmic [constants|omni] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -256,7 +284,7 @@ fn main() {
         match cmd.as_str() {
             "quit" | "exit" => break,
             "help" => {
-                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
+                println!("Commands: stats | power <id> | use <expression_id> | ctx | loc | persona | personas | alignment [status|choose <hero|vigilante|villain>] | alterego <set <name>> | life <new> | cast | promote <first> <last> [role] | growth [expr|unlock|mastery] | switch <persona_id> | storylets [all] | punctuation <on|off|turns> | author | civilian [events [detail]|detail <event_id>|resolve <event_id> <choice_id>|prefs ...|profile <balanced|vigilante|corporate>] | global [events [detail]|detail <event_id>|resolve <event_id> <choice_id>] | origin [paths|choose|status|event|tick] | alien [generate|detail|powers] [seed] | cosmic [constants|omni] | set <field> <value> | cd | scene | events | cases | combat <start|use|intent|tick|log|resolve|force_escape|force_escalate> | tick [n|next|rent|crisis|skip [days]] | quit");
             }
             "stats" => {
                 print_stats(&repo);
@@ -373,6 +401,8 @@ fn main() {
                             &mut target,
                             &mut storylet_state,
                             &game_time,
+                            &repo,
+                            world.turn,
                         );
                         update_pressure(&mut pressure, &city, &evidence, &cases, &game_time);
                         apply_civilian_pressure(&civilian_state, &mut pressure);
@@ -578,6 +608,7 @@ fn main() {
                                             &storylet_state,
                                             &persona_stack,
                                             alignment,
+                                            &omni_registry,
                                         );
                                         print_event_log(&mut event_log);
                                         println!(
@@ -1068,6 +1099,78 @@ fn main() {
                     }
                 }
             }
+            "alien" => {
+                let sub = parts.next().unwrap_or("generate").to_lowercase();
+                let seed = parts
+                    .next()
+                    .and_then(|raw| raw.parse::<u64>().ok())
+                    .unwrap_or(world.turn);
+                let catalog =
+                    match load_alien_generation_catalog("./assets/data/alien_generation.json") {
+                        Ok(catalog) => catalog,
+                        Err(err) => {
+                            println!("Failed to load alien generator: {}", err);
+                            continue;
+                        }
+                    };
+                let profile = generate_alien_species(&catalog, seed);
+                match sub.as_str() {
+                    "generate" => {
+                        for line in format_alien_profile(&profile, false) {
+                            println!("{}", line);
+                        }
+                    }
+                    "detail" => {
+                        for line in format_alien_profile(&profile, true) {
+                            println!("{}", line);
+                        }
+                    }
+                    "powers" => {
+                        for line in format_alien_profile(&profile, false) {
+                            println!("{}", line);
+                        }
+                        let holder_id = format!("alien:{}", seed);
+                        match assign_alien_powers(
+                            &repo,
+                            &profile,
+                            &omni_catalog,
+                            &mut omni_registry,
+                            &holder_id,
+                            "prime",
+                            seed,
+                            power_assignment_config.clone(),
+                        ) {
+                            Ok(assignment) => {
+                                print_power_assignment(&repo, &assignment);
+                            }
+                            Err(err) => {
+                                println!("Failed to assign alien powers: {}", err);
+                            }
+                        }
+                    }
+                    _ => {
+                        println!("Usage: alien [generate|detail|powers] [seed]");
+                    }
+                }
+            }
+            "cosmic" => {
+                let sub = parts.next().unwrap_or("constants").to_lowercase();
+                match sub.as_str() {
+                    "constants" => {
+                        if let Some(catalog) = &cosmic_constants {
+                            print_cosmic_constants(catalog);
+                        } else {
+                            println!("Cosmic constants not loaded.");
+                        }
+                    }
+                    "omni" => {
+                        print_omni_registry(&omni_registry);
+                    }
+                    _ => {
+                        println!("Usage: cosmic [constants|omni]");
+                    }
+                }
+            }
             "combat" => {
                 let sub = parts.next().unwrap_or("").to_lowercase();
                 match sub.as_str() {
@@ -1208,6 +1311,14 @@ fn main() {
                                 decay_heat(&mut city, &cases, &mut city_events);
                                 game_time.advance();
                                 tick_civilian_life(&mut civilian_state, &game_time);
+                                maybe_awaken_mutant_powers(
+                                    &mut civilian_state,
+                                    &repo,
+                                    &omni_catalog,
+                                    &mut omni_registry,
+                                    &power_assignment_config,
+                                    world.turn,
+                                );
                                 storylet_state.tick();
                                 update_pressure(
                                     &mut pressure,
@@ -1285,6 +1396,8 @@ fn main() {
                                             &mut target,
                                             &mut storylet_state,
                                             &game_time,
+                                            &repo,
+                                            world.turn,
                                         );
                                         update_pressure(
                                             &mut pressure,
@@ -1313,6 +1426,8 @@ fn main() {
                                         &mut target,
                                         &mut storylet_state,
                                         &game_time,
+                                        &repo,
+                                        world.turn,
                                         &mut world,
                                         &mut pressure,
                                         &city,
@@ -1369,6 +1484,8 @@ fn main() {
                                 &mut target,
                                 &mut storylet_state,
                                 &game_time,
+                                &repo,
+                                world.turn,
                                 &mut world,
                                 &mut pressure,
                                 &city,
@@ -1419,6 +1536,8 @@ fn main() {
                                 &mut target,
                                 &mut storylet_state,
                                 &game_time,
+                                &repo,
+                                world.turn,
                                 &mut world,
                                 &mut pressure,
                                 &city,
@@ -1560,6 +1679,14 @@ fn main() {
                             auto_mode,
                             &mut storylet_triggered,
                         );
+                        maybe_awaken_mutant_powers(
+                            &mut civilian_state,
+                            &repo,
+                            &omni_catalog,
+                            &mut omni_registry,
+                            &power_assignment_config,
+                            world.turn,
+                        );
                         ticks_run += 1;
                         if death_pending {
                             stop_reason = Some(TickStopReason::Death);
@@ -1639,6 +1766,8 @@ fn main() {
                         &mut target,
                         &mut storylet_state,
                         &game_time,
+                        &repo,
+                        world.turn,
                         &mut world,
                         &mut pressure,
                         &city,
@@ -1675,6 +1804,7 @@ fn main() {
                     &storylet_state,
                     &persona_stack,
                     alignment,
+                    &omni_registry,
                 );
                 print_tick_summary(
                     &world,
@@ -1704,6 +1834,7 @@ fn main() {
         &storylet_state,
         &persona_stack,
         alignment,
+        &omni_registry,
     );
 }
 
@@ -1996,23 +2127,6 @@ fn format_combat_end(end: CombatEnd) -> &'static str {
     }
 }
 
-fn parse_gadget_tier(value: &str) -> Option<GadgetTier> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "basic" => Some(GadgetTier::Basic),
-        "advanced" => Some(GadgetTier::Advanced),
-        "prototype" => Some(GadgetTier::Prototype),
-        "arsenal" => Some(GadgetTier::Arsenal),
-        _ => None,
-    }
-}
-
-fn format_gadget_error(err: GadgetPurchaseError) -> &'static str {
-    match err {
-        GadgetPurchaseError::InsufficientTier => "wealth tier too low",
-        GadgetPurchaseError::InsufficientLiquidity => "insufficient liquidity",
-    }
-}
-
 fn parse_combat_scale(raw: &str) -> Option<CombatScale> {
     match raw.to_lowercase().as_str() {
         "street" => Some(CombatScale::Street),
@@ -2174,6 +2288,54 @@ fn set_masked_label(stack: &mut PersonaStack, label: &str) -> bool {
     false
 }
 
+fn initialize_mutant_lineage(
+    civilian_state: &mut CivilianState,
+    repo: &dyn PowerRepository,
+    seed: u64,
+) {
+    if civilian_state.life.mutant_gene {
+        if civilian_state.mutant_profile.parent_power_ids.is_empty() {
+            match seed_mutant_inheritance(repo, seed, 1) {
+                Ok(inheritance) => {
+                    civilian_state.mutant_profile.omega_parent = inheritance.omega_parent;
+                    civilian_state.mutant_profile.parent_power_ids = inheritance
+                        .parent_powers
+                        .iter()
+                        .map(|power| power.0)
+                        .collect();
+                }
+                Err(err) => {
+                    eprintln!("Failed to seed mutant inheritance: {}", err);
+                }
+            }
+        }
+        return;
+    }
+    if !civilian_state.mutant_profile.parent_power_ids.is_empty() {
+        civilian_state.life.mutant_gene = true;
+        return;
+    }
+
+    match roll_mutant_lineage(repo, seed) {
+        Ok(outcome) => {
+            if outcome.mutant_gene {
+                civilian_state.life.mutant_gene = true;
+                if let Some(inheritance) = outcome.inheritance {
+                    civilian_state.mutant_profile.omega_parent = inheritance.omega_parent;
+                    civilian_state.mutant_profile.parent_power_ids = inheritance
+                        .parent_powers
+                        .iter()
+                        .map(|power| power.0)
+                        .collect();
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("Failed to roll mutant lineage: {}", err);
+        }
+    }
+}
+
 fn start_new_life(
     actor: &mut ActorState,
     growth: &mut GrowthState,
@@ -2185,6 +2347,8 @@ fn start_new_life(
     target: &mut TargetContext,
     storylet_state: &mut StoryletState,
     game_time: &GameTime,
+    repo: &dyn PowerRepository,
+    seed: u64,
 ) {
     *actor = ActorState {
         stamina: 10,
@@ -2215,6 +2379,7 @@ fn start_new_life(
     storylet_state.fired.remove("life_mutation_spark");
     storylet_state.cooldowns.remove("life_mutation_spark");
     apply_legacy_perks(civilian_state, storylet_state);
+    initialize_mutant_lineage(civilian_state, repo, seed);
 }
 
 fn apply_legacy_perks(
@@ -2295,6 +2460,8 @@ fn process_civilian_death(
     target: &mut TargetContext,
     storylet_state: &mut StoryletState,
     game_time: &GameTime,
+    repo: &dyn PowerRepository,
+    seed: u64,
     world: &mut WorldState,
     pressure: &mut PressureState,
     city: &CityState,
@@ -2322,6 +2489,8 @@ fn process_civilian_death(
         target,
         storylet_state,
         game_time,
+        repo,
+        seed,
     );
     update_pressure(pressure, city, evidence, cases, game_time);
     apply_civilian_pressure(civilian_state, pressure);
@@ -2333,6 +2502,98 @@ fn process_civilian_death(
         record.achievements.len()
     );
     true
+}
+
+fn maybe_awaken_mutant_powers(
+    civilian_state: &mut CivilianState,
+    repo: &dyn PowerRepository,
+    omni_catalog: &OmniPowerCatalog,
+    omni_registry: &mut OmniPowerRegistry,
+    config: &PowerAssignmentConfig,
+    seed: u64,
+) {
+    if !civilian_state.life.mutant_gene
+        || !civilian_state.life.mutation_ready
+        || civilian_state.mutant_profile.awakened
+    {
+        return;
+    }
+
+    if civilian_state.mutant_profile.parent_power_ids.is_empty() {
+        match seed_mutant_inheritance(repo, seed, 1) {
+            Ok(inheritance) => {
+                civilian_state.mutant_profile.omega_parent = inheritance.omega_parent;
+                civilian_state.mutant_profile.parent_power_ids = inheritance
+                    .parent_powers
+                    .iter()
+                    .map(|power| power.0)
+                    .collect();
+            }
+            Err(err) => {
+                eprintln!("Failed to seed mutant inheritance: {}", err);
+            }
+        }
+    }
+
+    let parent_powers: Vec<PowerId> = civilian_state
+        .mutant_profile
+        .parent_power_ids
+        .iter()
+        .map(|power_id| PowerId(*power_id))
+        .collect();
+    let inheritance = MutantInheritanceProfile {
+        parent_powers,
+        omega_parent: civilian_state.mutant_profile.omega_parent,
+    };
+
+    match assign_mutant_powers(
+        repo,
+        omni_catalog,
+        omni_registry,
+        "player",
+        "prime",
+        seed,
+        config.clone(),
+        Some(inheritance),
+    ) {
+        Ok(assignment) => {
+            civilian_state.mutant_profile.awakened = true;
+            civilian_state.mutant_profile.baseline_power_id =
+                assignment.baseline.map(|power| power.0);
+            civilian_state.mutant_profile.expression_power_ids = assignment
+                .expressions
+                .iter()
+                .map(|power| power.0)
+                .collect();
+            civilian_state.mutant_profile.omni_power_ids = assignment
+                .omni
+                .iter()
+                .map(|power| power.0)
+                .collect();
+
+            if let Ok(tier) = classify_mutant_tier(
+                repo,
+                assignment.baseline,
+                &assignment.expressions,
+                &assignment.omni,
+                civilian_state.mutant_profile.omega_parent,
+            ) {
+                civilian_state.mutant_profile.tier = tier;
+            }
+
+            let baseline_count = if assignment.baseline.is_some() { 1 } else { 0 };
+            println!(
+                "Mutation awakened: tier={} baseline={} expressions={} omni={}",
+                civilian_state.mutant_profile.tier_label(),
+                baseline_count,
+                assignment.expressions.len(),
+                assignment.omni.len()
+            );
+        }
+        Err(err) => {
+            eprintln!("Failed to assign mutant powers: {}", err);
+        }
+    }
 }
 
 fn handle_switch(
@@ -2559,6 +2820,22 @@ fn print_civilian_status(state: &CivilianState, time: &GameTime) {
         state.life.mutant_gene,
         state.life.mutation_ready
     );
+    if state.life.mutant_gene || state.mutant_profile.awakened {
+        let baseline_count = if state.mutant_profile.baseline_power_id.is_some() {
+            1
+        } else {
+            0
+        };
+        println!(
+            "  Mutant: awakened={} tier={} parent_powers={} baseline={} expressions={} omni={}",
+            state.mutant_profile.awakened,
+            state.mutant_profile.tier_label(),
+            state.mutant_profile.parent_power_ids.len(),
+            baseline_count,
+            state.mutant_profile.expression_power_ids.len(),
+            state.mutant_profile.omni_power_ids.len()
+        );
+    }
     println!(
         "  Mortality: risk={} legacy_count={}",
         state.life.mortality_risk,
@@ -2976,7 +3253,6 @@ fn print_civilian_event_detail(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AutoResolveMode {
-    Disabled,
     Normal,
     SkipRent,
     SkipCrises,
@@ -2984,7 +3260,6 @@ enum AutoResolveMode {
 
 fn auto_resolve_allowed(event_id: &str, mode: AutoResolveMode) -> bool {
     match mode {
-        AutoResolveMode::Disabled => false,
         AutoResolveMode::Normal => true,
         AutoResolveMode::SkipRent => event_id != "civilian_rent_due",
         AutoResolveMode::SkipCrises => !is_crisis_event_id(event_id),
@@ -3045,7 +3320,7 @@ fn auto_resolve_civilian_events(
     pressure: &mut PressureState,
     mode: AutoResolveMode,
 ) -> usize {
-    if matches!(mode, AutoResolveMode::Disabled) || state.pending_events.is_empty() {
+    if state.pending_events.is_empty() {
         return 0;
     }
     let mut resolved = 0usize;
@@ -4080,6 +4355,7 @@ fn persist_world_state(
     storylet_state: &StoryletState,
     persona_stack: &PersonaStack,
     alignment: Alignment,
+    omni_registry: &OmniPowerRegistry,
 ) {
     let state = WorldDbState {
         world_turn: world.turn,
@@ -4092,6 +4368,7 @@ fn persist_world_state(
         storylet_state: storylet_state.clone(),
         persona_stack: persona_stack.clone(),
         alignment,
+        omni_registry: omni_registry.clone(),
     };
     if let Err(err) = world_db.save_state(&state) {
         eprintln!("Failed to persist world state: {}", err);
@@ -4807,6 +5084,95 @@ fn apply_origin_rewards(rewards: &[OriginStageReward], pressure: &mut PressureSt
         }
         if let Some(notes) = reward.notes.as_deref() {
             println!("Origin reward: {}", notes);
+        }
+    }
+}
+
+fn print_power_assignment(repo: &dyn PowerRepository, assignment: &PowerAssignmentResult) {
+    if let Some(baseline) = assignment.baseline {
+        println!("Baseline power: {}", power_label(repo, baseline));
+    } else {
+        println!("Baseline power: none");
+    }
+
+    if assignment.expressions.is_empty() {
+        println!("Expression powers: none");
+    } else {
+        println!(
+            "Expression powers: {}",
+            assignment
+                .expressions
+                .iter()
+                .map(|id| power_label(repo, *id))
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+    }
+
+    if assignment.omni.is_empty() {
+        println!("Omni powers: none");
+    } else {
+        println!(
+            "Omni powers: {}",
+            assignment
+                .omni
+                .iter()
+                .map(|id| power_label(repo, *id))
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+    }
+
+    for note in &assignment.notes {
+        println!("Note: {}", note);
+    }
+}
+
+fn power_label(repo: &dyn PowerRepository, power_id: PowerId) -> String {
+    match repo.power_info(power_id) {
+        Ok(Some(info)) => format!("{} (id={})", info.name, power_id.0),
+        Ok(None) => format!("Unknown power (id={})", power_id.0),
+        Err(_) => format!("Power lookup failed (id={})", power_id.0),
+    }
+}
+
+fn print_cosmic_constants(catalog: &CosmicConstantsCatalog) {
+    if catalog.constants.is_empty() {
+        println!("Cosmic constants: none loaded");
+        return;
+    }
+    println!("Cosmic constants:");
+    for constant in &catalog.constants {
+        println!(
+            "  {} ({}) | role={} | bodies={} | hive_mind={}",
+            constant.label,
+            constant.id,
+            constant.role,
+            constant.body_count,
+            constant.hive_mind
+        );
+        for note in &constant.notes {
+            println!("    {}", note);
+        }
+    }
+}
+
+fn print_omni_registry(registry: &OmniPowerRegistry) {
+    let holders = registry.holder_powers();
+    if holders.is_empty() {
+        println!("Omni registry: no holders assigned.");
+        return;
+    }
+
+    println!("Omni registry:");
+    for (holder_id, powers) in holders {
+        println!("  {} -> {}", holder_id, powers.join(", "));
+    }
+    let universes = registry.universe_holders();
+    if !universes.is_empty() {
+        println!("Omni universes:");
+        for (universe_id, holder_id) in universes {
+            println!("  {} -> {}", universe_id, holder_id);
         }
     }
 }

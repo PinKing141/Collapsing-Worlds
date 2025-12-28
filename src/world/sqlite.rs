@@ -22,8 +22,9 @@ use crate::simulation::growth::{ExpressionMastery, GrowthState, Reputation};
 use crate::simulation::region::{ContinentId, CountryId, RegionId};
 use crate::simulation::storylet_state::StoryletState;
 use crate::simulation::time::GameTime;
+use crate::simulation::cosmic::OmniPowerRegistry;
 
-const WORLD_SCHEMA_VERSION: i64 = 6;
+const WORLD_SCHEMA_VERSION: i64 = 7;
 const WORLD_SAVE_VERSION: i64 = 1;
 
 const WORLD_DB_SCHEMA: &str = r#"
@@ -56,6 +57,11 @@ CREATE TABLE IF NOT EXISTS persona_state (
 );
 
 CREATE TABLE IF NOT EXISTS civilian_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  state_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS omni_registry (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   state_json TEXT NOT NULL
 );
@@ -487,6 +493,7 @@ pub struct WorldDbState {
     pub persona_stack: PersonaStack,
     pub alignment: Alignment,
     pub civilian_state: CivilianState,
+    pub omni_registry: OmniPowerRegistry,
 }
 
 impl Default for WorldDbState {
@@ -505,6 +512,7 @@ impl Default for WorldDbState {
             persona_stack: neutral_persona_stack(),
             alignment: Alignment::Neutral,
             civilian_state: CivilianState::default(),
+            omni_registry: OmniPowerRegistry::default(),
         }
     }
 }
@@ -552,6 +560,7 @@ impl WorldDb {
         let growth = self.load_growth_state()?;
         let storylet_state = self.load_storylet_state()?;
         let civilian_state = self.load_civilian_state()?;
+        let omni_registry = self.load_omni_registry()?;
 
         Ok(Some(WorldDbState {
             world_turn,
@@ -564,6 +573,7 @@ impl WorldDb {
             persona_stack,
             alignment,
             civilian_state,
+            omni_registry,
         }))
     }
 
@@ -603,6 +613,14 @@ impl WorldDb {
         tx.execute(
             "INSERT INTO civilian_state (id, state_json) VALUES (1, ?1)",
             params![civilian_json],
+        )?;
+
+        tx.execute("DELETE FROM omni_registry", [])?;
+        let omni_json = serde_json::to_string(&state.omni_registry)
+            .map_err(|err| WorldDbError::InvalidData(err.to_string()))?;
+        tx.execute(
+            "INSERT INTO omni_registry (id, state_json) VALUES (1, ?1)",
+            params![omni_json],
         )?;
 
         tx.execute("DELETE FROM locations", [])?;
@@ -787,7 +805,8 @@ impl WorldDb {
                     || schema_version == 2
                     || schema_version == 3
                     || schema_version == 4
-                    || schema_version == 5)
+                    || schema_version == 5
+                    || schema_version == 6)
                     && save_version == WORLD_SAVE_VERSION
                 {
                     self.conn.execute(
@@ -1045,6 +1064,21 @@ impl WorldDb {
             .optional()?;
         let Some(json) = row else {
             return Ok(CivilianState::default());
+        };
+        serde_json::from_str(&json).map_err(|err| WorldDbError::InvalidData(err.to_string()))
+    }
+
+    fn load_omni_registry(&self) -> Result<OmniPowerRegistry, WorldDbError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT state_json FROM omni_registry WHERE id = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let Some(json) = row else {
+            return Ok(OmniPowerRegistry::default());
         };
         serde_json::from_str(&json).map_err(|err| WorldDbError::InvalidData(err.to_string()))
     }

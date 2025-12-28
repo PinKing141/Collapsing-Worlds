@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -266,6 +266,79 @@ impl PowerRepository for SqlitePowerRepository {
             text_short,
             text_mechanical,
         }))
+    }
+
+    fn power_id_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<PowerId>, Box<dyn std::error::Error>> {
+        let mut stmt =
+            self.conn
+                .prepare("SELECT rowid FROM Superpower4 WHERE lower(name) = lower(?1) LIMIT 1")?;
+        let id = stmt
+            .query_row([name], |row| row.get::<_, i64>(0))
+            .optional()?;
+        Ok(id.map(PowerId))
+    }
+
+    fn power_tags(&self, power_id: PowerId) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let mut stmt =
+            self.conn
+                .prepare("SELECT tag FROM power_tag WHERE power_id = ?1")?;
+        let rows = stmt.query_map([power_id.0], |row| row.get::<_, String>(0))?;
+        let mut tags = Vec::new();
+        for row in rows {
+            let tag = row?.trim().to_string();
+            if !tag.is_empty() {
+                tags.push(tag);
+            }
+        }
+        Ok(tags)
+    }
+
+    fn power_ids_by_tags(
+        &self,
+        tags_any: &[String],
+        tags_all: &[String],
+        tags_none: &[String],
+    ) -> Result<Vec<PowerId>, Box<dyn std::error::Error>> {
+        let normalize = |tag: &str| tag.trim().to_ascii_lowercase();
+        let tags_any: HashSet<String> = tags_any.iter().map(|t| normalize(t)).collect();
+        let tags_all: HashSet<String> = tags_all.iter().map(|t| normalize(t)).collect();
+        let tags_none: HashSet<String> = tags_none.iter().map(|t| normalize(t)).collect();
+
+        let mut stmt = self
+            .conn
+            .prepare("SELECT power_id, tag FROM power_tag")?;
+        let rows = stmt.query_map([], |row| {
+            let power_id: i64 = row.get(0)?;
+            let tag: String = row.get(1)?;
+            Ok((power_id, normalize(&tag)))
+        })?;
+
+        let mut map: HashMap<i64, HashSet<String>> = HashMap::new();
+        for row in rows {
+            let (power_id, tag) = row?;
+            if tag.is_empty() {
+                continue;
+            }
+            map.entry(power_id).or_default().insert(tag);
+        }
+
+        let mut out = Vec::new();
+        for (power_id, tags) in map {
+            if !tags_all.is_empty() && !tags_all.is_subset(&tags) {
+                continue;
+            }
+            if !tags_any.is_empty() && tags_any.intersection(&tags).next().is_none() {
+                continue;
+            }
+            if !tags_none.is_empty() && tags_none.intersection(&tags).next().is_some() {
+                continue;
+            }
+            out.push(PowerId(power_id));
+        }
+        Ok(out)
     }
 
     fn expressions_for_persona(

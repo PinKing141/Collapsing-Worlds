@@ -4,3 +4,6 @@ pub mod endgame_events;
 pub mod storylets;
 pub mod nemesis;
 pub mod global_events;
+pub mod alien_generation;
+pub mod cosmic_constants;
+pub mod omni_powers;

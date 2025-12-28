@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "constants": [
+    {
+      "id": "the_one_who_is_beyond",
+      "label": "The One Who Is Beyond",
+      "role": "Prime constant and creator",
+      "order": 1,
+      "body_count": 1,
+      "hive_mind": false,
+      "notes": [
+        "Exists outside all universes as the absolute constant.",
+        "Issues the mandate that universes must be observed, not ruled."
+      ]
+    },
+    {
+      "id": "the_one_who_is_bound",
+      "label": "The One Who Is Bound",
+      "role": "Opposite constant and absolute evil",
+      "order": 1,
+      "body_count": 1,
+      "hive_mind": false,
+      "notes": [
+        "The antithesis to the Beyond.",
+        "Represents ruin and malice beyond mortal scale."
+      ]
+    },
+    {
+      "id": "the_all_seeing",
+      "label": "The All Seeing",
+      "role": "Watcher hive mind",
+      "order": 2,
+      "body_count": 3,
+      "hive_mind": true,
+      "notes": [
+        "One consciousness expressed through three bodies.",
+        "Tasked by the Beyond to observe every universe."
+      ]
+    },
+    {
+      "id": "the_grand_jury",
+      "label": "The Grand Jury",
+      "role": "Cosmic judge of irredeemable evil",
+      "order": 3,
+      "body_count": 1,
+      "hive_mind": false,
+      "notes": [
+        "Judges entities of extreme moral collapse.",
+        "Reserved for evil beyond understanding."
+      ]
+    }
+  ]
+}

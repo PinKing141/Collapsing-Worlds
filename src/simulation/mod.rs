@@ -16,3 +16,6 @@ pub mod civilian;
 pub mod nemesis;
 pub mod endgame;
 pub mod economy;
+pub mod alien;
+pub mod cosmic;
+pub mod power_assignment;
