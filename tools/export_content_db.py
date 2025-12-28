@@ -77,6 +77,7 @@ def export_db(src_path: Path, dest_path: Path, tables: Iterable[str]) -> None:
         "INSERT INTO content_meta (id, schema_version, content_version) VALUES (1, ?, ?)",
         (CONTENT_SCHEMA_VERSION, CONTENT_VERSION),
     )
+    conn.commit()
     conn.execute("DETACH DATABASE src")
     conn.execute("VACUUM;")
     conn.close()

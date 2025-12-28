@@ -1,9 +1,0 @@
-(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)
-(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)
-(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)
-(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)
-(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)
-agents::_::<impl Deserialize<'de> for AgentCatalog>::deserialize::__Field
-agents::_::<impl Deserialize<'de> for AgentRole>::deserialize::__Field
-agents::_::<impl Deserialize<'de> for AgentTemplate>::deserialize::__Field
-serde_json::Map<std::string::String, serde_json::Value>
